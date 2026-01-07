@@ -3,49 +3,294 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gym Tracker Pro v4 - Boot Test</title>
+    <title>Gym Tracker Pro v4</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        #root:empty::before { content: "Loading interface... if this persists, check your internet connection for CDNs."; color: #52525b; padding: 20px; display: block; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100">
+<body class="bg-zinc-950 text-zinc-100 font-sans">
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useMemo } = React;
 
+        // --- Utils & Constants ---
+        const uid = () => crypto.randomUUID();
+        const todayISO = () => new Date().toISOString().slice(0, 10);
+        const toNum = (v) => (v === "" || v == null ? null : Number(v));
+        const MUSCLES = ["Chest", "Back", "Shoulders", "Biceps", "Triceps", "Quads", "Hamstrings", "Glutes", "Calves", "Abs", "Other"];
+
+        const Storage = {
+            save: (data) => localStorage.setItem("gym_tracker_pro_v4", JSON.stringify(data)),
+            load: () => {
+                const saved = localStorage.getItem("gym_tracker_pro_v4");
+                return saved ? JSON.parse(saved) : null;
+            }
+        };
+
+        // --- Components ---
+        const Card = ({ children, className = "" }) => (
+            <div className={`rounded-2xl bg-zinc-900/60 border border-zinc-800 p-4 md:p-5 shadow-sm ${className}`}>{children}</div>
+        );
+
+        const Button = ({ children, variant = "primary", ...props }) => {
+            const themes = {
+                primary: "bg-zinc-100 text-zinc-950 hover:bg-white",
+                ghost: "bg-transparent border border-zinc-800 text-zinc-100 hover:bg-zinc-900",
+                danger: "bg-red-500/10 border border-red-500/50 text-red-500 hover:bg-red-500 hover:text-white"
+            };
+            return (
+                <button {...props} className={`rounded-xl px-4 py-2 text-sm font-semibold transition active:scale-95 disabled:opacity-30 ${themes[variant]} ${props.className || ""}`}>
+                    {children}
+                </button>
+            );
+        };
+
+        const Input = (props) => (
+            <input {...props} className={`w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-600 ${props.className || ""}`} />
+        );
+
+        // --- Main App ---
         function App() {
-            const [status, setStatus] = useState("System Online");
+            const [state, setState] = useState(() => Storage.load() || {
+                exerciseLibrary: {},
+                templates: [],
+                sessions: [],
+                activeSplitId: null,
+                splitCycleIndexBySplitId: {},
+                settings: { splitMode: "calendar" }
+            });
+
+            const [tab, setTab] = useState("sessions");
+
+            useEffect(() => Storage.save(state), [state]);
+
+            // --- Logic Helpers ---
+            const addSessionFromTemplate = (tpl) => {
+                const newSession = {
+                    id: uid(),
+                    date: todayISO(),
+                    name: tpl.name,
+                    exercises: (tpl.exercises || []).map(ex => ({
+                        id: uid(),
+                        name: ex.name,
+                        repTarget: ex.repTarget,
+                        sets: [{ id: uid(), reps: "", weight: "" }]
+                    }))
+                };
+                setState(prev => ({ ...prev, sessions: [newSession, ...prev.sessions] }));
+                setTab("sessions");
+            };
+
+            const updateSession = (id, updater) => {
+                setState(prev => ({
+                    ...prev,
+                    sessions: prev.sessions.map(s => s.id === id ? updater(s) : s)
+                }));
+            };
 
             return (
-                <div className="p-10 text-center">
-                    <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl inline-block shadow-2xl">
-                        <h1 className="text-3xl font-bold mb-2">Interface Loaded ✅</h1>
-                        <p className="text-zinc-400 mb-6">React and Babel are working correctly.</p>
-                        
-                        <div className="flex gap-4 justify-center">
-                            <button 
-                                onClick={() => alert("Logic Test Success")}
-                                className="bg-zinc-100 text-zinc-950 px-6 py-2 rounded-xl font-bold hover:bg-white active:scale-95 transition"
-                            >
-                                Test Button
-                            </button>
+                <div className="max-w-3xl mx-auto px-4 py-8 mb-20">
+                    <header className="mb-8 flex justify-between items-end">
+                        <div>
+                            <h1 className="text-3xl font-bold tracking-tight">Gym Tracker Pro</h1>
+                            <p className="text-zinc-500 text-sm">Welcome back to your progress.</p>
                         </div>
-                    </div>
+                        <Button variant="ghost" onClick={() => {
+                            const data = JSON.stringify(state, null, 2);
+                            const blob = new Blob([data], {type: 'application/json'});
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `gym-backup-${todayISO()}.json`;
+                            a.click();
+                        }}>Export</Button>
+                    </header>
+
+                    <nav className="flex gap-2 overflow-x-auto pb-4 mb-6 no-scrollbar sticky top-0 bg-zinc-950/80 backdrop-blur-md z-10">
+                        {['sessions', 'templates', 'history', 'settings'].map(t => (
+                            <button 
+                                key={t}
+                                onClick={() => setTab(t)}
+                                className={`px-5 py-2 rounded-full text-sm font-bold capitalize transition-all whitespace-nowrap ${tab === t ? 'bg-zinc-100 text-zinc-950 shadow-lg' : 'text-zinc-500 hover:text-zinc-200'}`}
+                            >
+                                {t}
+                            </button>
+                        ))}
+                    </nav>
+
+                    <main className="space-y-6">
+                        {tab === 'sessions' && (
+                            <div className="space-y-6">
+                                <Card className="bg-gradient-to-br from-zinc-900 to-zinc-950 border-zinc-700">
+                                    <h2 className="font-bold text-lg mb-1">Workout Plan</h2>
+                                    <p className="text-zinc-500 text-xs mb-4 uppercase tracking-widest">Today's Targets</p>
+                                    <div className="flex gap-2 flex-wrap">
+                                        {state.templates.map(tpl => (
+                                            <Button key={tpl.id} onClick={() => addSessionFromTemplate(tpl)} variant="ghost">
+                                                Start {tpl.name}
+                                            </Button>
+                                        ))}
+                                        {state.templates.length === 0 && <p className="text-sm text-zinc-500 italic">No templates created yet.</p>}
+                                    </div>
+                                </Card>
+
+                                <div className="space-y-4">
+                                    <h2 className="font-bold text-xl px-1">Recent Sessions</h2>
+                                    {state.sessions.map(session => (
+                                        <SessionCard 
+                                            key={session.id} 
+                                            session={session} 
+                                            onDelete={() => setState(p => ({...p, sessions: p.sessions.filter(s => s.id !== session.id)}))}
+                                            onUpdate={(updater) => updateSession(session.id, updater)}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {tab === 'templates' && <TemplatesView state={state} setState={setState} />}
+                        {tab === 'settings' && <SettingsView state={state} setState={setState} />}
+                        {tab === 'history' && <HistoryView sessions={state.sessions} />}
+                    </main>
                 </div>
             );
         }
 
-        try {
-            const root = ReactDOM.createRoot(document.getElementById("root"));
-            root.render(<App />);
-        } catch (err) {
-            document.getElementById("root").innerHTML = `<div style="color:red; padding:20px;">Mounting Error: ${err.message}</div>`;
+        // --- Sub-View: Session Card ---
+        function SessionCard({ session, onDelete, onUpdate }) {
+            return (
+                <Card className="border-zinc-800">
+                    <div className="flex justify-between items-center mb-4">
+                        <div>
+                            <h3 className="font-bold text-zinc-100">{session.name}</h3>
+                            <p className="text-xs text-zinc-500">{session.date}</p>
+                        </div>
+                        <Button variant="danger" className="text-xs py-1 px-2" onClick={onDelete}>Remove</Button>
+                    </div>
+
+                    <div className="space-y-6">
+                        {session.exercises.map(ex => (
+                            <div key={ex.id} className="space-y-3">
+                                <div className="flex justify-between items-end border-b border-zinc-800 pb-2">
+                                    <span className="font-semibold text-sm">{ex.name}</span>
+                                    <span className="text-[10px] text-zinc-500 uppercase tracking-tighter">Target: {ex.repTarget} reps</span>
+                                </div>
+                                {ex.sets.map((set, sIdx) => (
+                                    <div key={set.id} className="flex gap-3 items-center">
+                                        <span className="text-[10px] text-zinc-600 font-bold w-4">S{sIdx+1}</span>
+                                        <Input placeholder="kg" type="number" className="h-9 text-center" value={set.weight} onChange={(e) => {
+                                            onUpdate(s => ({...s, exercises: s.exercises.map(eObj => eObj.id === ex.id ? {...eObj, sets: eObj.sets.map(sObj => sObj.id === set.id ? {...sObj, weight: e.target.value} : sObj)} : eObj)}))
+                                        }} />
+                                        <Input placeholder="reps" type="number" className="h-9 text-center" value={set.reps} onChange={(e) => {
+                                            onUpdate(s => ({...s, exercises: s.exercises.map(eObj => eObj.id === ex.id ? {...eObj, sets: eObj.sets.map(sObj => sObj.id === set.id ? {...sObj, reps: e.target.value} : sObj)} : eObj)}))
+                                        }} />
+                                        <button className="text-zinc-700 hover:text-red-500" onClick={() => {
+                                             onUpdate(s => ({...s, exercises: s.exercises.map(eObj => eObj.id === ex.id ? {...eObj, sets: eObj.sets.filter(sObj => sObj.id !== set.id)} : eObj)}))
+                                        }}>✕</button>
+                                    </div>
+                                ))}
+                                <Button variant="ghost" className="w-full text-xs py-1 border-dashed" onClick={() => {
+                                    onUpdate(s => ({...s, exercises: s.exercises.map(eObj => eObj.id === ex.id ? {...eObj, sets: [...eObj.sets, {id: uid(), weight: "", reps: ""}]} : eObj)}))
+                                }}>+ Add Set</Button>
+                            </div>
+                        ))}
+                    </div>
+                </Card>
+            );
         }
+
+        // --- Sub-View: Templates ---
+        function TemplatesView({ state, setState }) {
+            const [name, setName] = useState("");
+            const [exStr, setExStr] = useState("Bench Press,8\nSquat,6");
+
+            const saveTemplate = () => {
+                const exLines = exStr.split('\n').filter(l => l.trim());
+                const exercises = exLines.map(l => {
+                    const [n, r] = l.split(',');
+                    return { id: uid(), name: n.trim(), repTarget: toNum(r) || 8 };
+                });
+                const newTpl = { id: uid(), name, exercises };
+                setState(prev => ({ ...prev, templates: [newTpl, ...prev.templates] }));
+                setName("");
+            };
+
+            return (
+                <div className="space-y-4">
+                    <Card>
+                        <h2 className="font-bold mb-4">Create Template</h2>
+                        <div className="space-y-3">
+                            <Input placeholder="Workout Name" value={name} onChange={e => setName(e.target.value)} />
+                            <textarea 
+                                className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-600 min-h-[100px]"
+                                placeholder="Exercise, RepTarget (one per line)"
+                                value={exStr}
+                                onChange={e => setExStr(e.target.value)}
+                            />
+                            <Button className="w-full" onClick={saveTemplate} disabled={!name}>Save Template</Button>
+                        </div>
+                    </Card>
+                    {state.templates.map(t => (
+                        <Card key={t.id} className="flex justify-between items-center bg-zinc-900/40">
+                            <div>
+                                <p className="font-bold">{t.name}</p>
+                                <p className="text-xs text-zinc-500">{t.exercises.length} exercises</p>
+                            </div>
+                            <Button variant="danger" onClick={() => setState(p => ({...p, templates: p.templates.filter(tpl => tpl.id !== t.id)}))}>Delete</Button>
+                        </Card>
+                    ))}
+                </div>
+            );
+        }
+
+        // --- Sub-View: History ---
+        function HistoryView({ sessions }) {
+            return (
+                <div className="space-y-4">
+                    <h2 className="font-bold text-xl px-1">Progression Log</h2>
+                    {sessions.length === 0 ? <p className="text-zinc-500 p-4">Complete a workout to see history.</p> : 
+                        sessions.map(s => (
+                            <Card key={s.id} className="text-sm">
+                                <div className="flex justify-between font-bold border-b border-zinc-800 pb-2 mb-2">
+                                    <span>{s.name}</span>
+                                    <span className="text-zinc-500">{s.date}</span>
+                                </div>
+                                {s.exercises.map(ex => (
+                                    <div key={ex.id} className="flex justify-between py-1">
+                                        <span className="text-zinc-400">{ex.name}</span>
+                                        <span className="font-mono">{ex.sets.map(set => `${set.weight || 0}x${set.reps || 0}`).join(' | ')}</span>
+                                    </div>
+                                ))}
+                            </Card>
+                        ))
+                    }
+                </div>
+            );
+        }
+
+        // --- Sub-View: Settings ---
+        function SettingsView({ state, setState }) {
+            return (
+                <Card>
+                    <h2 className="font-bold mb-4">Settings</h2>
+                    <Button variant="danger" className="w-full" onClick={() => {
+                        if(confirm("Permanently delete ALL data?")) {
+                            localStorage.removeItem("gym_tracker_pro_v4");
+                            window.location.reload();
+                        }
+                    }}>Clear All Data</Button>
+                </Card>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById("root"));
+        root.render(<App />);
     </script>
 </body>
 </html>
