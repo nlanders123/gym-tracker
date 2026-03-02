@@ -2,18 +2,26 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { Plus } from 'lucide-react'
+import MealLoggerModal from '../components/MealLoggerModal'
 
 export default function Nutrition() {
   const { user } = useAuth()
   
-  // State
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [isEditingTargets, setIsEditingTargets] = useState(false)
   const [targetForm, setTargetForm] = useState({ protein: 0, fat: 0, carbs: 0 })
+  
+  // Modal State
+  const [activeModalMeal, setActiveModalMeal] = useState(null)
+  
+  // Logged Data State
+  const [todayMeals, setTodayMeals] = useState([])
+  const [totals, setTotals] = useState({ protein: 0, fat: 0, carbs: 0, calories: 0 })
 
   useEffect(() => {
     fetchProfile()
+    fetchTodayMeals()
   }, [])
 
   const fetchProfile = async () => {
@@ -26,11 +34,7 @@ export default function Nutrition() {
         
       if (error) throw error
       setProfile(data)
-      setTargetForm({
-        protein: data.target_protein,
-        fat: data.target_fat,
-        carbs: data.target_carbs
-      })
+      setTargetForm({ protein: data.target_protein, fat: data.target_fat, carbs: data.target_carbs })
     } catch (error) {
       console.error('Error fetching profile:', error.message)
     } finally {
@@ -38,14 +42,44 @@ export default function Nutrition() {
     }
   }
 
+  const fetchTodayMeals = async () => {
+    const today = new Date().toISOString().split('T')[0]
+    try {
+      const { data: logData } = await supabase
+        .from('daily_logs')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('date', today)
+        .single()
+
+      if (logData) {
+        const { data: meals } = await supabase
+          .from('logged_meals')
+          .select('*')
+          .eq('daily_log_id', logData.id)
+          
+        if (meals) {
+          setTodayMeals(meals)
+          
+          // Calculate totals
+          const newTotals = meals.reduce((acc, meal) => ({
+            protein: acc.protein + meal.protein,
+            fat: acc.fat + meal.fat,
+            carbs: acc.carbs + meal.carbs,
+            calories: acc.calories + meal.calories
+          }), { protein: 0, fat: 0, carbs: 0, calories: 0 })
+          
+          setTotals(newTotals)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching meals:', error.message)
+    }
+  }
+
   const updateTargets = async (e) => {
     e.preventDefault()
-    
-    // Calculate total calories (P*4 + C*4 + F*9)
-    const calories = (Number(targetForm.protein) * 4) + 
-                     (Number(targetForm.carbs) * 4) + 
-                     (Number(targetForm.fat) * 9)
-
+    const calories = (Number(targetForm.protein) * 4) + (Number(targetForm.carbs) * 4) + (Number(targetForm.fat) * 9)
     try {
       const { error } = await supabase
         .from('profiles')
@@ -58,19 +92,14 @@ export default function Nutrition() {
         .eq('id', user.id)
 
       if (error) throw error
-      
-      setProfile({
-        ...profile,
-        target_protein: targetForm.protein,
-        target_fat: targetForm.fat,
-        target_carbs: targetForm.carbs,
-        target_calories: calories
-      })
+      setProfile({ ...profile, target_protein: targetForm.protein, target_fat: targetForm.fat, target_carbs: targetForm.carbs, target_calories: calories })
       setIsEditingTargets(false)
     } catch (error) {
       console.error('Error updating targets:', error.message)
     }
   }
+
+  const mealCategories = ['Breakfast', 'Lunch', 'Dinner', 'Snacks']
 
   if (loading) return <div className="min-h-screen bg-zinc-950 p-6 flex items-center justify-center text-zinc-500">Loading...</div>
 
@@ -112,13 +141,13 @@ export default function Nutrition() {
           </button>
         </form>
       ) : (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-8">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-8 shadow-sm">
           <div className="flex justify-between items-end mb-6">
             <div>
-              <div className="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-1">Calories Remaining</div>
+              <div className="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-1">Calories</div>
               <div className="flex items-baseline gap-1">
-                <span className="text-4xl font-bold">{profile?.target_calories || 0}</span>
-                <span className="text-zinc-500 font-medium pb-1">kcal</span>
+                <span className="text-4xl font-bold">{totals.calories}</span>
+                <span className="text-zinc-500 font-medium pb-1">/ {profile?.target_calories || 0}</span>
               </div>
             </div>
           </div>
@@ -126,15 +155,15 @@ export default function Nutrition() {
           <div className="grid grid-cols-3 gap-3 text-sm">
             <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
               <div className="text-zinc-500 text-xs font-bold mb-1">Protein</div>
-              <div className="font-bold">0 <span className="text-zinc-600">/ {profile?.target_protein}g</span></div>
+              <div className="font-bold">{totals.protein} <span className="text-zinc-600">/ {profile?.target_protein}g</span></div>
             </div>
             <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
               <div className="text-zinc-500 text-xs font-bold mb-1">Fat</div>
-              <div className="font-bold">0 <span className="text-zinc-600">/ {profile?.target_fat}g</span></div>
+              <div className="font-bold">{totals.fat} <span className="text-zinc-600">/ {profile?.target_fat}g</span></div>
             </div>
             <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
               <div className="text-zinc-500 text-xs font-bold mb-1">Carbs</div>
-              <div className="font-bold">0 <span className="text-zinc-600">/ {profile?.target_carbs}g</span></div>
+              <div className="font-bold">{totals.carbs} <span className="text-zinc-600">/ {profile?.target_carbs}g</span></div>
             </div>
           </div>
         </div>
@@ -142,22 +171,48 @@ export default function Nutrition() {
 
       {/* Meal Categories */}
       <div className="space-y-4">
-        {['Breakfast', 'Lunch', 'Dinner', 'Snacks'].map(meal => (
-          <div key={meal} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="font-bold text-lg">{meal}</h3>
-              <button className="flex items-center gap-1 text-sm font-bold text-zinc-900 bg-white px-3 py-1.5 rounded-lg hover:bg-zinc-200 transition">
-                <Plus size={16} strokeWidth={3} /> Add
-              </button>
+        {mealCategories.map(meal => {
+          const mealsInCategory = todayMeals.filter(m => m.category === meal.toLowerCase())
+          
+          return (
+            <div key={meal} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-bold text-lg">{meal}</h3>
+                <button 
+                  onClick={() => setActiveModalMeal(meal)}
+                  className="flex items-center gap-1 text-sm font-bold text-zinc-900 bg-white px-3 py-1.5 rounded-lg hover:bg-zinc-200 transition"
+                >
+                  <Plus size={16} strokeWidth={3} /> Add
+                </button>
+              </div>
+              
+              {mealsInCategory.length === 0 ? (
+                <div className="text-sm text-zinc-500 bg-zinc-950/50 border border-zinc-800/50 rounded-xl p-4 text-center border-dashed">
+                  No foods logged yet.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {mealsInCategory.map(m => (
+                    <div key={m.id} className="flex justify-between items-center bg-zinc-950/50 p-3 rounded-xl border border-zinc-800/50">
+                      <span className="font-medium text-sm">{m.name}</span>
+                      <span className="text-xs text-zinc-500 font-medium">
+                        {m.protein}P • {m.fat}F • {m.carbs}C
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            
-            {/* Empty State */}
-            <div className="text-sm text-zinc-500 bg-zinc-950/50 border border-zinc-800/50 rounded-xl p-4 text-center border-dashed">
-              No foods logged yet.
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
+
+      <MealLoggerModal 
+        isOpen={!!activeModalMeal} 
+        onClose={() => setActiveModalMeal(null)} 
+        mealType={activeModalMeal || ''} 
+        onLogSuccess={fetchTodayMeals}
+      />
     </div>
   )
 }
