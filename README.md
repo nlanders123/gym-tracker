@@ -1,16 +1,84 @@
-# React + Vite
+# Apex
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Apex is a minimalist fitness + nutrition tracker designed for **fast logging** and **progressive overload**.
 
-Currently, two official plugins are available:
+This repo is intentionally documented so that any AI coding agent (OpenClaw, Claude Code, Codex, etc.) can quickly understand:
+- what the product is
+- the MVP/V1 scope
+- the architecture and data model
+- what has already been tried
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Product Principles
 
-## React Compiler
+- **Frictionless > feature-rich**: quick-add macros, minimal taps.
+- **Reliable**: data should never “disappear”; changes are small and testable.
+- **Consistent UI**: reusable components, no ad-hoc styling.
+- **AI-ready**: expose data/actions via MCP so agents can read + write in a controlled way.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+See: `DESIGN.md`.
 
-## Expanding the ESLint configuration
+## Tech Stack
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- Frontend: React + Vite + Tailwind
+- Backend: Supabase (Postgres + Auth + RLS)
+- Deployment: Vercel (web/PWA)
+- AI Integration (local): MCP server in `mcp_apex/`
+
+## Local Development
+
+### 1) Clone
+
+```bash
+git clone https://github.com/nlanders123/gym-tracker.git
+cd gym-tracker
+```
+
+### 2) Create `.env`
+
+Create a `.env` file in the repo root (NOT committed):
+
+```env
+VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_ANON_KEY
+```
+
+### 3) Install + run
+
+```bash
+npm install
+npm run dev
+```
+
+Open the printed URL (usually http://localhost:5173).
+
+## Supabase Setup
+
+### Base schema
+Run `supabase_schema.sql` once (SQL Editor).
+
+### Migrations
+Run migrations as they appear in `supabase_migration_*.sql`.
+
+Current required workout migration:
+- `supabase_migration_001_workouts.sql`
+
+## Repo Structure (high level)
+
+- `src/lib/supabase.js` — Supabase client
+- `src/contexts/AuthContext.jsx` — auth state
+- `src/pages/Nutrition.jsx` — nutrition UI + logic
+- `src/pages/Workouts.jsx` — workouts UI + routing to template/session
+- `src/pages/workouts/TemplateEditor.jsx` — template builder
+- `src/pages/workouts/SessionLogger.jsx` — session + set logging
+- `mcp_apex/` — local MCP server scaffold (AI door)
+
+## Operational Rules (how we build)
+
+- Commit small, working increments.
+- Don’t refactor wide areas without a reason.
+- If a feature requires a schema change, add a `supabase_migration_###.sql`.
+- Keep documentation updated (README + CHANGELOG + DESIGN).
+
+## Status
+
+See `CHANGELOG.md` and `ROADMAP.md`.
