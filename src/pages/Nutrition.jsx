@@ -1,204 +1,371 @@
-import { useState, useEffect } from 'react'
-import { useAuth } from '../contexts/AuthContext'
+import { useEffect, useMemo, useState } from 'react'
+import { Plus, Copy } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { Plus } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 import MealLoggerModal from '../components/MealLoggerModal'
+
+function labelToEnum(label) {
+  return label.toLowerCase() === 'snacks' ? 'snack' : label.toLowerCase()
+}
+
+function isoDate(d) {
+  return d.toISOString().split('T')[0]
+}
 
 export default function Nutrition() {
   const { user } = useAuth()
-  
+
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [isEditingTargets, setIsEditingTargets] = useState(false)
   const [targetForm, setTargetForm] = useState({ protein: 0, fat: 0, carbs: 0 })
-  
-  // Modal State
-  const [activeModalMeal, setActiveModalMeal] = useState(null)
-  
-  // Logged Data State
+
   const [todayMeals, setTodayMeals] = useState([])
   const [totals, setTotals] = useState({ protein: 0, fat: 0, carbs: 0, calories: 0 })
 
-  useEffect(() => {
-    fetchProfile()
-    fetchTodayMeals()
-  }, [])
-
-  const fetchProfile = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-        
-      if (error) throw error
-      setProfile(data)
-      setTargetForm({ protein: data.target_protein, fat: data.target_fat, carbs: data.target_carbs })
-    } catch (error) {
-      console.error('Error fetching profile:', error.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchTodayMeals = async () => {
-    const today = new Date().toISOString().split('T')[0]
-    try {
-      const { data: logData } = await supabase
-        .from('daily_logs')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('date', today)
-        .single()
-
-      if (logData) {
-        const { data: meals } = await supabase
-          .from('logged_meals')
-          .select('*')
-          .eq('daily_log_id', logData.id)
-          
-        if (meals) {
-          setTodayMeals(meals)
-          
-          // Calculate totals
-          const newTotals = meals.reduce((acc, meal) => ({
-            protein: acc.protein + meal.protein,
-            fat: acc.fat + meal.fat,
-            carbs: acc.carbs + meal.carbs,
-            calories: acc.calories + meal.calories
-          }), { protein: 0, fat: 0, carbs: 0, calories: 0 })
-          
-          setTotals(newTotals)
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching meals:', error.message)
-    }
-  }
-
-  const updateTargets = async (e) => {
-    e.preventDefault()
-    const calories = (Number(targetForm.protein) * 4) + (Number(targetForm.carbs) * 4) + (Number(targetForm.fat) * 9)
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          target_protein: Number(targetForm.protein),
-          target_fat: Number(targetForm.fat),
-          target_carbs: Number(targetForm.carbs),
-          target_calories: calories
-        })
-        .eq('id', user.id)
-
-      if (error) throw error
-      setProfile({ ...profile, target_protein: targetForm.protein, target_fat: targetForm.fat, target_carbs: targetForm.carbs, target_calories: calories })
-      setIsEditingTargets(false)
-    } catch (error) {
-      console.error('Error updating targets:', error.message)
-    }
-  }
+  // modal
+  const [activeModalMealType, setActiveModalMealType] = useState(null)
+  const [editingMeal, setEditingMeal] = useState(null)
 
   const mealCategories = ['Breakfast', 'Lunch', 'Dinner', 'Snacks']
 
-  if (loading) return <div className="min-h-screen bg-zinc-950 p-6 flex items-center justify-center text-zinc-500">Loading...</div>
+  useEffect(() => {
+    ;(async () => {
+      await fetchProfile()
+      await fetchTodayMeals()
+      setLoading(false)
+    })()
+  }, [])
+
+  const fetchProfile = async () => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+
+    if (error) throw error
+
+    setProfile(data)
+    setTargetForm({
+      protein: data.target_protein,
+      fat: data.target_fat,
+      carbs: data.target_carbs,
+    })
+  }
+
+  const fetchTodayMeals = async () => {
+    const today = isoDate(new Date())
+
+    // find today's log
+    const { data: logData, error: logErr } = await supabase
+      .from('daily_logs')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('date', today)
+      .maybeSingle()
+
+    if (logErr) throw logErr
+
+    if (!logData) {
+      setTodayMeals([])
+      setTotals({ protein: 0, fat: 0, carbs: 0, calories: 0 })
+      return
+    }
+
+    const { data: meals, error: mealsErr } = await supabase
+      .from('logged_meals')
+      .select('*')
+      .eq('daily_log_id', logData.id)
+      .order('created_at', { ascending: true })
+
+    if (mealsErr) throw mealsErr
+
+    const safeMeals = meals ?? []
+    setTodayMeals(safeMeals)
+
+    const newTotals = safeMeals.reduce(
+      (acc, meal) => ({
+        protein: acc.protein + (meal.protein || 0),
+        fat: acc.fat + (meal.fat || 0),
+        carbs: acc.carbs + (meal.carbs || 0),
+        calories: acc.calories + (meal.calories || 0),
+      }),
+      { protein: 0, fat: 0, carbs: 0, calories: 0 }
+    )
+
+    setTotals(newTotals)
+  }
+
+  const remaining = useMemo(() => {
+    if (!profile) return { protein: 0, fat: 0, carbs: 0, calories: 0 }
+    return {
+      protein: Math.max(0, (profile.target_protein || 0) - totals.protein),
+      fat: Math.max(0, (profile.target_fat || 0) - totals.fat),
+      carbs: Math.max(0, (profile.target_carbs || 0) - totals.carbs),
+      calories: Math.max(0, (profile.target_calories || 0) - totals.calories),
+    }
+  }, [profile, totals])
+
+  const updateTargets = async (e) => {
+    e.preventDefault()
+
+    const calories =
+      Number(targetForm.protein) * 4 +
+      Number(targetForm.carbs) * 4 +
+      Number(targetForm.fat) * 9
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        target_protein: Number(targetForm.protein),
+        target_fat: Number(targetForm.fat),
+        target_carbs: Number(targetForm.carbs),
+        target_calories: calories,
+      })
+      .eq('id', user.id)
+
+    if (error) throw error
+
+    setProfile({
+      ...profile,
+      target_protein: Number(targetForm.protein),
+      target_fat: Number(targetForm.fat),
+      target_carbs: Number(targetForm.carbs),
+      target_calories: calories,
+    })
+
+    setIsEditingTargets(false)
+  }
+
+  const openAddModal = (mealLabel) => {
+    setEditingMeal(null)
+    setActiveModalMealType(mealLabel)
+  }
+
+  const openEditModal = (meal) => {
+    setActiveModalMealType(null)
+    setEditingMeal(meal)
+  }
+
+  const closeModal = () => {
+    setActiveModalMealType(null)
+    setEditingMeal(null)
+  }
+
+  const copyYesterday = async (mealLabel) => {
+    const today = new Date()
+    const y = new Date(today)
+    y.setDate(y.getDate() - 1)
+
+    const todayStr = isoDate(today)
+    const yStr = isoDate(y)
+
+    const category = labelToEnum(mealLabel)
+
+    // find yesterday log
+    const { data: yLog, error: yErr } = await supabase
+      .from('daily_logs')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('date', yStr)
+      .maybeSingle()
+
+    if (yErr) throw yErr
+    if (!yLog) {
+      alert("No meals found for yesterday.")
+      return
+    }
+
+    const { data: yMeals, error: yMealsErr } = await supabase
+      .from('logged_meals')
+      .select('*')
+      .eq('daily_log_id', yLog.id)
+      .eq('category', category)
+
+    if (yMealsErr) throw yMealsErr
+
+    if (!yMeals || yMeals.length === 0) {
+      alert(`No ${mealLabel} meals found for yesterday.`)
+      return
+    }
+
+    // get/create today's log
+    const { data: tLog, error: tErr } = await supabase
+      .from('daily_logs')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('date', todayStr)
+      .maybeSingle()
+
+    if (tErr) throw tErr
+
+    let tLogId = tLog?.id
+    if (!tLogId) {
+      const { data: newLog, error: newErr } = await supabase
+        .from('daily_logs')
+        .insert({ user_id: user.id, date: todayStr })
+        .select('id')
+        .single()
+
+      if (newErr) throw newErr
+      tLogId = newLog.id
+    }
+
+    // insert copies
+    const inserts = yMeals.map((m) => ({
+      daily_log_id: tLogId,
+      user_id: user.id,
+      name: m.name,
+      category: m.category,
+      calories: m.calories,
+      protein: m.protein,
+      fat: m.fat,
+      carbs: m.carbs,
+    }))
+
+    const { error: insErr } = await supabase.from('logged_meals').insert(inserts)
+    if (insErr) throw insErr
+
+    await fetchTodayMeals()
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 p-6 flex items-center justify-center text-zinc-500">
+        Loading…
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white p-6 pb-24 font-sans">
+    <div className="min-h-screen bg-zinc-950 text-white p-6 pb-24">
       <header className="mb-6 flex justify-between items-end">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Nutrition</h1>
-          <p className="text-zinc-400 text-sm mt-1">Today's macros and logging.</p>
+          <p className="text-zinc-400 text-sm mt-1">Fast logging. No bloat.</p>
         </div>
-        <button 
+        <button
           onClick={() => setIsEditingTargets(!isEditingTargets)}
           className="text-xs font-bold text-zinc-400 bg-zinc-900 px-3 py-1.5 rounded-lg border border-zinc-800 hover:text-white transition"
         >
-          {isEditingTargets ? 'Cancel' : 'Edit Targets'}
+          {isEditingTargets ? 'Cancel' : 'Edit targets'}
         </button>
       </header>
 
-      {/* Targets Dashboard */}
       {isEditingTargets ? (
         <form onSubmit={updateTargets} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-8">
-          <h3 className="font-bold mb-4">Set Daily Targets</h3>
+          <h3 className="font-bold mb-4">Set daily targets</h3>
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div>
               <label className="block text-xs text-zinc-500 mb-1">Protein (g)</label>
-              <input type="number" value={targetForm.protein} onChange={e => setTargetForm({...targetForm, protein: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white outline-none focus:border-zinc-600" />
+              <input
+                type="number"
+                value={targetForm.protein}
+                onChange={(e) => setTargetForm({ ...targetForm, protein: e.target.value })}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white outline-none focus:border-zinc-600"
+              />
             </div>
             <div>
               <label className="block text-xs text-zinc-500 mb-1">Fat (g)</label>
-              <input type="number" value={targetForm.fat} onChange={e => setTargetForm({...targetForm, fat: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white outline-none focus:border-zinc-600" />
+              <input
+                type="number"
+                value={targetForm.fat}
+                onChange={(e) => setTargetForm({ ...targetForm, fat: e.target.value })}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white outline-none focus:border-zinc-600"
+              />
             </div>
             <div>
               <label className="block text-xs text-zinc-500 mb-1">Carbs (g)</label>
-              <input type="number" value={targetForm.carbs} onChange={e => setTargetForm({...targetForm, carbs: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white outline-none focus:border-zinc-600" />
+              <input
+                type="number"
+                value={targetForm.carbs}
+                onChange={(e) => setTargetForm({ ...targetForm, carbs: e.target.value })}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white outline-none focus:border-zinc-600"
+              />
             </div>
           </div>
           <button type="submit" className="w-full bg-white text-zinc-950 font-bold rounded-xl py-2.5 hover:bg-zinc-200 transition">
-            Save Targets
+            Save
           </button>
         </form>
       ) : (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-8 shadow-sm">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-8">
           <div className="flex justify-between items-end mb-6">
             <div>
               <div className="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-1">Calories</div>
-              <div className="flex items-baseline gap-1">
+              <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-bold">{totals.calories}</span>
-                <span className="text-zinc-500 font-medium pb-1">/ {profile?.target_calories || 0}</span>
+                <span className="text-zinc-500 font-medium">/ {profile?.target_calories || 0}</span>
+              </div>
+              <div className="text-xs text-zinc-500 mt-1">
+                Remaining: <span className="text-zinc-200 font-semibold">{remaining.calories}</span>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-3 text-sm">
-            <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
-              <div className="text-zinc-500 text-xs font-bold mb-1">Protein</div>
-              <div className="font-bold">{totals.protein} <span className="text-zinc-600">/ {profile?.target_protein}g</span></div>
-            </div>
-            <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
-              <div className="text-zinc-500 text-xs font-bold mb-1">Fat</div>
-              <div className="font-bold">{totals.fat} <span className="text-zinc-600">/ {profile?.target_fat}g</span></div>
-            </div>
-            <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
-              <div className="text-zinc-500 text-xs font-bold mb-1">Carbs</div>
-              <div className="font-bold">{totals.carbs} <span className="text-zinc-600">/ {profile?.target_carbs}g</span></div>
-            </div>
+            {[
+              { label: 'Protein', value: totals.protein, target: profile?.target_protein, rem: remaining.protein },
+              { label: 'Fat', value: totals.fat, target: profile?.target_fat, rem: remaining.fat },
+              { label: 'Carbs', value: totals.carbs, target: profile?.target_carbs, rem: remaining.carbs },
+            ].map((m) => (
+              <div key={m.label} className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
+                <div className="text-zinc-500 text-xs font-bold mb-1">{m.label}</div>
+                <div className="font-bold">
+                  {m.value} <span className="text-zinc-600">/ {m.target}g</span>
+                </div>
+                <div className="text-[11px] text-zinc-600 mt-1">Rem: {m.rem}g</div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Meal Categories */}
       <div className="space-y-4">
-        {mealCategories.map(meal => {
-          const mealsInCategory = todayMeals.filter(m => m.category === meal.toLowerCase())
-          
+        {mealCategories.map((mealLabel) => {
+          const mealsInCategory = todayMeals.filter((m) => m.category === labelToEnum(mealLabel))
+
           return (
-            <div key={meal} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+            <div key={mealLabel} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
               <div className="flex justify-between items-center mb-3">
-                <h3 className="font-bold text-lg">{meal}</h3>
-                <button 
-                  onClick={() => setActiveModalMeal(meal)}
-                  className="flex items-center gap-1 text-sm font-bold text-zinc-900 bg-white px-3 py-1.5 rounded-lg hover:bg-zinc-200 transition"
-                >
-                  <Plus size={16} strokeWidth={3} /> Add
-                </button>
+                <h3 className="font-bold text-lg">{mealLabel}</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => copyYesterday(mealLabel)}
+                    className="flex items-center gap-1 text-xs font-bold text-zinc-300 bg-zinc-800 px-2.5 py-1.5 rounded-lg hover:bg-zinc-700 transition"
+                    title="Copy yesterday"
+                  >
+                    <Copy size={14} />
+                    Copy
+                  </button>
+                  <button
+                    onClick={() => openAddModal(mealLabel)}
+                    className="flex items-center gap-1 text-sm font-bold text-zinc-900 bg-white px-3 py-1.5 rounded-lg hover:bg-zinc-200 transition"
+                  >
+                    <Plus size={16} strokeWidth={3} /> Add
+                  </button>
+                </div>
               </div>
-              
+
               {mealsInCategory.length === 0 ? (
                 <div className="text-sm text-zinc-500 bg-zinc-950/50 border border-zinc-800/50 rounded-xl p-4 text-center border-dashed">
                   No foods logged yet.
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {mealsInCategory.map(m => (
-                    <div key={m.id} className="flex justify-between items-center bg-zinc-950/50 p-3 rounded-xl border border-zinc-800/50">
+                  {mealsInCategory.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => openEditModal(m)}
+                      className="w-full text-left flex justify-between items-center bg-zinc-950/50 p-3 rounded-xl border border-zinc-800/50 hover:border-zinc-700 hover:bg-zinc-950/70 transition"
+                      title="Click to edit"
+                    >
                       <span className="font-medium text-sm">{m.name}</span>
                       <span className="text-xs text-zinc-500 font-medium">
                         {m.protein}P • {m.fat}F • {m.carbs}C
                       </span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -207,10 +374,18 @@ export default function Nutrition() {
         })}
       </div>
 
-      <MealLoggerModal 
-        isOpen={!!activeModalMeal} 
-        onClose={() => setActiveModalMeal(null)} 
-        mealType={activeModalMeal || ''} 
+      <MealLoggerModal
+        isOpen={!!activeModalMealType}
+        onClose={closeModal}
+        mealType={activeModalMealType || ''}
+        onLogSuccess={fetchTodayMeals}
+      />
+
+      <MealLoggerModal
+        isOpen={!!editingMeal}
+        onClose={closeModal}
+        mealType={editingMeal?.category || ''}
+        existingMeal={editingMeal}
         onLogSuccess={fetchTodayMeals}
       />
     </div>
