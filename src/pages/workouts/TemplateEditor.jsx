@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { ArrowLeft, Plus, Play } from 'lucide-react'
+import MigrationRequired from './MigrationRequired'
 
 export default function TemplateEditor() {
   const { id } = useParams()
@@ -13,12 +14,16 @@ export default function TemplateEditor() {
   const [exercises, setExercises] = useState([])
   const [newExercise, setNewExercise] = useState('')
   const [loading, setLoading] = useState(true)
+  const [needsMigration, setNeedsMigration] = useState(false)
 
   useEffect(() => {
     ;(async () => {
-      await fetchTemplate()
-      await fetchExercises()
-      setLoading(false)
+      try {
+        await fetchTemplate()
+        await fetchExercises()
+      } finally {
+        setLoading(false)
+      }
     })()
   }, [id])
 
@@ -40,7 +45,15 @@ export default function TemplateEditor() {
       .eq('template_id', id)
       .eq('user_id', user.id)
       .order('order_index', { ascending: true })
-    if (error) throw error
+
+    if (error) {
+      if ((error.message || '').includes('template_exercises')) {
+        setNeedsMigration(true)
+        return
+      }
+      throw error
+    }
+
     setExercises(data ?? [])
   }
 
@@ -84,7 +97,6 @@ export default function TemplateEditor() {
   const startSession = async () => {
     if (!template) return
 
-    // Create session
     const { data: session, error: sessionErr } = await supabase
       .from('workout_sessions')
       .insert({
@@ -100,7 +112,6 @@ export default function TemplateEditor() {
       return
     }
 
-    // Copy exercises into logged_exercises
     if (exercises.length) {
       const inserts = exercises.map((ex) => ({
         session_id: session.id,
@@ -121,6 +132,15 @@ export default function TemplateEditor() {
 
   if (loading) {
     return <div className="min-h-screen bg-zinc-950 text-zinc-500 p-6">Loading…</div>
+  }
+
+  if (needsMigration) {
+    return (
+      <MigrationRequired
+        title="Workout templates need a one-time migration"
+        body="To enable template exercises, run the Supabase migration file (001). Then refresh this page."
+      />
+    )
   }
 
   return (
