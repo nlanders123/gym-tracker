@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X, Trash2 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { logMeal, updateMeal, deleteMeal } from '../lib/api/nutrition'
 
 function toMealEnum(mealTypeLabel) {
   return mealTypeLabel.toLowerCase() === 'snacks' ? 'snack' : mealTypeLabel.toLowerCase()
@@ -48,73 +48,32 @@ export default function MealLoggerModal({
     const p = Number(formData.protein) || 0
     const f = Number(formData.fat) || 0
     const c = Number(formData.carbs) || 0
-    const cals = p * 4 + c * 4 + f * 9
 
     try {
       if (isEdit) {
-        const { error } = await supabase
-          .from('logged_meals')
-          .update({
-            name: formData.name,
-            protein: p,
-            fat: f,
-            carbs: c,
-            calories: cals,
-          })
-          .eq('id', existingMeal.id)
-          .eq('user_id', user.id)
-
-        if (error) throw error
-
-        onLogSuccess()
-        onClose()
-        return
-      }
-
-      // Create flow
-      const today = new Date().toISOString().split('T')[0]
-
-      const { data: logData, error: logErr } = await supabase
-        .from('daily_logs')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('date', today)
-        .maybeSingle()
-
-      if (logErr) throw logErr
-
-      let dailyLogId = logData?.id
-
-      if (!dailyLogId) {
-        const { data: newLog, error: createErr } = await supabase
-          .from('daily_logs')
-          .insert({ user_id: user.id, date: today })
-          .select('id')
-          .single()
-
-        if (createErr) throw createErr
-        dailyLogId = newLog.id
-      }
-
-      const { error: mealError } = await supabase
-        .from('logged_meals')
-        .insert({
-          daily_log_id: dailyLogId,
-          user_id: user.id,
+        const { error } = await updateMeal(user.id, existingMeal.id, {
           name: formData.name,
-          category: toMealEnum(mealType),
           protein: p,
           fat: f,
           carbs: c,
-          calories: cals,
         })
-
-      if (mealError) throw mealError
+        if (error) throw error
+      } else {
+        const { error } = await logMeal(user.id, {
+          category: toMealEnum(mealType),
+          name: formData.name,
+          protein: p,
+          fat: f,
+          carbs: c,
+        })
+        if (error) throw error
+      }
 
       onLogSuccess()
       onClose()
     } catch (error) {
       console.error('Error logging meal:', error)
+      // TODO: replace with toast
       alert(error?.message || 'Failed to log meal')
     } finally {
       setLoading(false)
@@ -127,12 +86,7 @@ export default function MealLoggerModal({
 
     setLoading(true)
     try {
-      const { error } = await supabase
-        .from('logged_meals')
-        .delete()
-        .eq('id', existingMeal.id)
-        .eq('user_id', user.id)
-
+      const { error } = await deleteMeal(user.id, existingMeal.id)
       if (error) throw error
 
       onLogSuccess()
@@ -213,7 +167,7 @@ export default function MealLoggerModal({
             disabled={loading}
             className="w-full bg-white text-zinc-950 font-bold rounded-xl py-3.5 mt-6 hover:bg-zinc-200 transition active:scale-[0.98] disabled:opacity-50"
           >
-            {loading ? 'Saving…' : isEdit ? 'Save changes' : 'Log macros'}
+            {loading ? 'Saving...' : isEdit ? 'Save changes' : 'Log macros'}
           </button>
         </form>
       </div>

@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Copy } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { getProfile, updateTargets } from '../lib/api/profile'
+import { getTodayMeals, copyYesterdayMeals } from '../lib/api/nutrition'
 import MealLoggerModal from '../components/MealLoggerModal'
+
+const MEAL_CATEGORIES = ['Breakfast', 'Lunch', 'Dinner', 'Snacks']
 
 function labelToEnum(label) {
   return label.toLowerCase() === 'snacks' ? 'snack' : label.toLowerCase()
-}
-
-function isoDate(d) {
-  return d.toISOString().split('T')[0]
 }
 
 export default function Nutrition() {
@@ -23,11 +22,8 @@ export default function Nutrition() {
   const [todayMeals, setTodayMeals] = useState([])
   const [totals, setTotals] = useState({ protein: 0, fat: 0, carbs: 0, calories: 0 })
 
-  // modal
   const [activeModalMealType, setActiveModalMealType] = useState(null)
   const [editingMeal, setEditingMeal] = useState(null)
-
-  const mealCategories = ['Breakfast', 'Lunch', 'Dinner', 'Snacks']
 
   useEffect(() => {
     ;(async () => {
@@ -38,13 +34,8 @@ export default function Nutrition() {
   }, [])
 
   const fetchProfile = async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single()
-
-    if (error) throw error
+    const { data, error } = await getProfile(user.id)
+    if (error) { console.error(error); return }
 
     setProfile(data)
     setTargetForm({
@@ -55,46 +46,11 @@ export default function Nutrition() {
   }
 
   const fetchTodayMeals = async () => {
-    const today = isoDate(new Date())
+    const { meals, totals: t, error } = await getTodayMeals(user.id)
+    if (error) { console.error(error); return }
 
-    // find today's log
-    const { data: logData, error: logErr } = await supabase
-      .from('daily_logs')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('date', today)
-      .maybeSingle()
-
-    if (logErr) throw logErr
-
-    if (!logData) {
-      setTodayMeals([])
-      setTotals({ protein: 0, fat: 0, carbs: 0, calories: 0 })
-      return
-    }
-
-    const { data: meals, error: mealsErr } = await supabase
-      .from('logged_meals')
-      .select('*')
-      .eq('daily_log_id', logData.id)
-      .order('created_at', { ascending: true })
-
-    if (mealsErr) throw mealsErr
-
-    const safeMeals = meals ?? []
-    setTodayMeals(safeMeals)
-
-    const newTotals = safeMeals.reduce(
-      (acc, meal) => ({
-        protein: acc.protein + (meal.protein || 0),
-        fat: acc.fat + (meal.fat || 0),
-        carbs: acc.carbs + (meal.carbs || 0),
-        calories: acc.calories + (meal.calories || 0),
-      }),
-      { protein: 0, fat: 0, carbs: 0, calories: 0 }
-    )
-
-    setTotals(newTotals)
+    setTodayMeals(meals)
+    setTotals(t)
   }
 
   const remaining = useMemo(() => {
@@ -107,35 +63,32 @@ export default function Nutrition() {
     }
   }, [profile, totals])
 
-  const updateTargets = async (e) => {
+  const handleUpdateTargets = async (e) => {
     e.preventDefault()
-
-    const calories =
-      Number(targetForm.protein) * 4 +
-      Number(targetForm.carbs) * 4 +
-      Number(targetForm.fat) * 9
-
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        target_protein: Number(targetForm.protein),
-        target_fat: Number(targetForm.fat),
-        target_carbs: Number(targetForm.carbs),
-        target_calories: calories,
-      })
-      .eq('id', user.id)
-
-    if (error) throw error
-
-    setProfile({
-      ...profile,
-      target_protein: Number(targetForm.protein),
-      target_fat: Number(targetForm.fat),
-      target_carbs: Number(targetForm.carbs),
-      target_calories: calories,
+    const { data, error } = await updateTargets(user.id, {
+      protein: Number(targetForm.protein),
+      fat: Number(targetForm.fat),
+      carbs: Number(targetForm.carbs),
     })
 
+    if (error) { console.error(error); return }
+
+    setProfile(data)
     setIsEditingTargets(false)
+  }
+
+  const handleCopyYesterday = async (mealLabel) => {
+    const category = labelToEnum(mealLabel)
+    const { error } = await copyYesterdayMeals(user.id, category)
+
+    if (error) {
+      console.error(error)
+      // TODO: replace with toast
+      alert(error.message)
+      return
+    }
+
+    await fetchTodayMeals()
   }
 
   const openAddModal = (mealLabel) => {
@@ -153,87 +106,10 @@ export default function Nutrition() {
     setEditingMeal(null)
   }
 
-  const copyYesterday = async (mealLabel) => {
-    const today = new Date()
-    const y = new Date(today)
-    y.setDate(y.getDate() - 1)
-
-    const todayStr = isoDate(today)
-    const yStr = isoDate(y)
-
-    const category = labelToEnum(mealLabel)
-
-    // find yesterday log
-    const { data: yLog, error: yErr } = await supabase
-      .from('daily_logs')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('date', yStr)
-      .maybeSingle()
-
-    if (yErr) throw yErr
-    if (!yLog) {
-      alert("No meals found for yesterday.")
-      return
-    }
-
-    const { data: yMeals, error: yMealsErr } = await supabase
-      .from('logged_meals')
-      .select('*')
-      .eq('daily_log_id', yLog.id)
-      .eq('category', category)
-
-    if (yMealsErr) throw yMealsErr
-
-    if (!yMeals || yMeals.length === 0) {
-      alert(`No ${mealLabel} meals found for yesterday.`)
-      return
-    }
-
-    // get/create today's log
-    const { data: tLog, error: tErr } = await supabase
-      .from('daily_logs')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('date', todayStr)
-      .maybeSingle()
-
-    if (tErr) throw tErr
-
-    let tLogId = tLog?.id
-    if (!tLogId) {
-      const { data: newLog, error: newErr } = await supabase
-        .from('daily_logs')
-        .insert({ user_id: user.id, date: todayStr })
-        .select('id')
-        .single()
-
-      if (newErr) throw newErr
-      tLogId = newLog.id
-    }
-
-    // insert copies
-    const inserts = yMeals.map((m) => ({
-      daily_log_id: tLogId,
-      user_id: user.id,
-      name: m.name,
-      category: m.category,
-      calories: m.calories,
-      protein: m.protein,
-      fat: m.fat,
-      carbs: m.carbs,
-    }))
-
-    const { error: insErr } = await supabase.from('logged_meals').insert(inserts)
-    if (insErr) throw insErr
-
-    await fetchTodayMeals()
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-zinc-950 p-6 flex items-center justify-center text-zinc-500">
-        Loading…
+        Loading...
       </div>
     )
   }
@@ -254,36 +130,24 @@ export default function Nutrition() {
       </header>
 
       {isEditingTargets ? (
-        <form onSubmit={updateTargets} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-8">
+        <form onSubmit={handleUpdateTargets} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-8">
           <h3 className="font-bold mb-4">Set daily targets</h3>
           <div className="grid grid-cols-3 gap-4 mb-4">
-            <div>
-              <label className="block text-xs text-zinc-500 mb-1">Protein (g)</label>
-              <input
-                type="number"
-                value={targetForm.protein}
-                onChange={(e) => setTargetForm({ ...targetForm, protein: e.target.value })}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white outline-none focus:border-zinc-600"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-500 mb-1">Fat (g)</label>
-              <input
-                type="number"
-                value={targetForm.fat}
-                onChange={(e) => setTargetForm({ ...targetForm, fat: e.target.value })}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white outline-none focus:border-zinc-600"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-500 mb-1">Carbs (g)</label>
-              <input
-                type="number"
-                value={targetForm.carbs}
-                onChange={(e) => setTargetForm({ ...targetForm, carbs: e.target.value })}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white outline-none focus:border-zinc-600"
-              />
-            </div>
+            {[
+              { key: 'protein', label: 'Protein (g)' },
+              { key: 'fat', label: 'Fat (g)' },
+              { key: 'carbs', label: 'Carbs (g)' },
+            ].map(({ key, label }) => (
+              <div key={key}>
+                <label className="block text-xs text-zinc-500 mb-1">{label}</label>
+                <input
+                  type="number"
+                  value={targetForm[key]}
+                  onChange={(e) => setTargetForm({ ...targetForm, [key]: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white outline-none focus:border-zinc-600"
+                />
+              </div>
+            ))}
           </div>
           <button type="submit" className="w-full bg-white text-zinc-950 font-bold rounded-xl py-2.5 hover:bg-zinc-200 transition">
             Save
@@ -323,7 +187,7 @@ export default function Nutrition() {
       )}
 
       <div className="space-y-4">
-        {mealCategories.map((mealLabel) => {
+        {MEAL_CATEGORIES.map((mealLabel) => {
           const mealsInCategory = todayMeals.filter((m) => m.category === labelToEnum(mealLabel))
 
           return (
@@ -332,7 +196,7 @@ export default function Nutrition() {
                 <h3 className="font-bold text-lg">{mealLabel}</h3>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => copyYesterday(mealLabel)}
+                    onClick={() => handleCopyYesterday(mealLabel)}
                     className="flex items-center gap-1 text-xs font-bold text-zinc-300 bg-zinc-800 px-2.5 py-1.5 rounded-lg hover:bg-zinc-700 transition"
                     title="Copy yesterday"
                   >
@@ -363,7 +227,7 @@ export default function Nutrition() {
                     >
                       <span className="font-medium text-sm">{m.name}</span>
                       <span className="text-xs text-zinc-500 font-medium">
-                        {m.protein}P • {m.fat}F • {m.carbs}C
+                        {m.protein}P  {m.fat}F  {m.carbs}C
                       </span>
                     </button>
                   ))}

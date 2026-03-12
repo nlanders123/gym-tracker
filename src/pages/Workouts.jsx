@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { getTemplates, createTemplate, getSessions } from '../lib/api/workouts'
 import { Plus, ChevronRight } from 'lucide-react'
 
 export default function Workouts() {
@@ -19,48 +19,25 @@ export default function Workouts() {
   }, [])
 
   const fetchTemplates = async () => {
-    const { data, error } = await supabase
-      .from('workout_templates')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      console.error(error)
-      return
-    }
-
-    setTemplates(data ?? [])
+    const { data, error } = await getTemplates(user.id)
+    if (error) { console.error(error); return }
+    setTemplates(data)
   }
 
   const fetchSessions = async () => {
-    const { data, error } = await supabase
-      .from('workout_sessions')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('date', { ascending: false })
-      .limit(30)
-
-    if (error) {
-      console.error(error)
-      return
-    }
-
-    setSessions(data ?? [])
+    const { data, error } = await getSessions(user.id)
+    if (error) { console.error(error); return }
+    setSessions(data)
   }
 
-  const createTemplate = async (e) => {
+  const handleCreateTemplate = async (e) => {
     e.preventDefault()
     const name = newTemplateName.trim()
     if (!name) return
 
-    const { data, error } = await supabase
-      .from('workout_templates')
-      .insert({ user_id: user.id, name })
-      .select('*')
-      .single()
-
+    const { data, error } = await createTemplate(user.id, name)
     if (error) {
+      console.error(error)
       alert(error.message)
       return
     }
@@ -122,7 +99,7 @@ export default function Workouts() {
         </div>
       ) : (
         <div>
-          <form onSubmit={createTemplate} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4">
+          <form onSubmit={handleCreateTemplate} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4">
             <div className="flex gap-2">
               <input
                 value={newTemplateName}
