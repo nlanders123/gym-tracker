@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { getTemplates, createTemplate, getSessions } from '../lib/api/workouts'
 import { Plus, ChevronRight } from 'lucide-react'
+import { useToast } from '../components/Toast'
 
 export default function Workouts() {
   const { user } = useAuth()
   const nav = useNavigate()
+  const toast = useToast()
 
   const [activeTab, setActiveTab] = useState('sessions')
   const [templates, setTemplates] = useState([])
@@ -38,7 +40,7 @@ export default function Workouts() {
     const { data, error } = await createTemplate(user.id, name)
     if (error) {
       console.error(error)
-      alert(error.message)
+      toast(error.message, 'error')
       return
     }
 

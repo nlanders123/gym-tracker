@@ -10,11 +10,13 @@ import {
 import { searchExercises, findExerciseByName } from '../../lib/api/exercises'
 import { supabase } from '../../lib/supabase'
 import { ArrowLeft, Plus, Play, Search } from 'lucide-react'
+import { useToast } from '../../components/Toast'
 
 export default function TemplateEditor() {
   const { id } = useParams()
   const nav = useNavigate()
   const { user } = useAuth()
+  const toast = useToast()
 
   const [template, setTemplate] = useState(null)
   const [exercises, setExercises] = useState([])
@@ -75,7 +77,7 @@ export default function TemplateEditor() {
     const { error } = await addTemplateExercise(user.id, id, exercise.name, exercises.length)
     if (error) {
       console.error(error)
-      alert(error.message)
+      toast(error.message, 'error')
       return
     }
 
@@ -97,7 +99,7 @@ export default function TemplateEditor() {
     const { error } = await addTemplateExercise(user.id, id, match?.name || name, exercises.length)
     if (error) {
       console.error(error)
-      alert(error.message)
+      toast(error.message, 'error')
       return
     }
 
@@ -113,7 +115,7 @@ export default function TemplateEditor() {
     const { error } = await removeTemplateExercise(user.id, exerciseId)
     if (error) {
       console.error(error)
-      alert(error.message)
+      toast(error.message, 'error')
       return
     }
 
@@ -126,7 +128,7 @@ export default function TemplateEditor() {
     const { data: session, error } = await startSession(user.id, template, exercises)
     if (error) {
       console.error(error)
-      alert(error.message)
+      toast(error.message, 'error')
       return
     }
 

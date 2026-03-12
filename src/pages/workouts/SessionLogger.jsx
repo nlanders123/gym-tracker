@@ -10,11 +10,13 @@ import {
   getLastPerformanceBatch,
 } from '../../lib/api/workouts'
 import { ArrowLeft, Plus, TrendingUp } from 'lucide-react'
+import { useToast } from '../../components/Toast'
 
 export default function SessionLogger() {
   const { id } = useParams()
   const nav = useNavigate()
   const { user } = useAuth()
+  const toast = useToast()
 
   const [session, setSession] = useState(null)
   const [exercises, setExercises] = useState([])
@@ -67,7 +69,7 @@ export default function SessionLogger() {
     const { error } = await addSet(user.id, exercise.id, nextNumber)
     if (error) {
       console.error(error)
-      alert(error.message)
+      toast(error.message, 'error')
       return
     }
 
@@ -80,7 +82,7 @@ export default function SessionLogger() {
     const { error } = await updateSet(user.id, setId, patch)
     if (error) {
       console.error(error)
-      alert(error.message)
+      toast(error.message, 'error')
       return
     }
 

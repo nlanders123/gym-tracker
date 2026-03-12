@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Copy } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../components/Toast'
 import { getProfile, updateTargets } from '../lib/api/profile'
 import { getTodayMeals, copyYesterdayMeals } from '../lib/api/nutrition'
 import MealLoggerModal from '../components/MealLoggerModal'
@@ -13,6 +14,7 @@ function labelToEnum(label) {
 
 export default function Nutrition() {
   const { user } = useAuth()
+  const toast = useToast()
 
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -83,8 +85,7 @@ export default function Nutrition() {
 
     if (error) {
       console.error(error)
-      // TODO: replace with toast
-      alert(error.message)
+      toast(error.message, 'error')
       return
     }
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X, Trash2, Bookmark, ChevronLeft, ScanBarcode, Search } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from './Toast'
 import {
   logMeal,
   updateMeal,
@@ -25,6 +26,7 @@ export default function MealLoggerModal({
   existingMeal = null,
 }) {
   const { user } = useAuth()
+  const toast = useToast()
   const [loading, setLoading] = useState(false)
   const [view, setView] = useState('pick') // 'pick' | 'form' | 'search' | 'scanner'
   const [savedMeals, setSavedMeals] = useState([])
@@ -105,7 +107,7 @@ export default function MealLoggerModal({
       onClose()
     } catch (error) {
       console.error('Error logging meal:', error)
-      alert(error?.message || 'Failed to log meal')
+      toast(error?.message || 'Failed to log meal', 'error')
     } finally {
       setLoading(false)
     }
@@ -124,7 +126,7 @@ export default function MealLoggerModal({
       onClose()
     } catch (error) {
       console.error('Error deleting meal:', error)
-      alert(error?.message || 'Failed to delete meal')
+      toast(error?.message || 'Failed to delete meal', 'error')
     } finally {
       setLoading(false)
     }
@@ -139,7 +141,7 @@ export default function MealLoggerModal({
       onClose()
     } catch (error) {
       console.error('Error logging saved meal:', error)
-      alert(error?.message || 'Failed to log meal')
+      toast(error?.message || 'Failed to log meal', 'error')
     } finally {
       setLoading(false)
     }
@@ -151,7 +153,7 @@ export default function MealLoggerModal({
     const c = Number(formData.carbs) || 0
 
     if (!formData.name || formData.name === 'Quick Add') {
-      alert('Give the meal a name before saving it.')
+      toast('Give the meal a name before saving it.', 'error')
       return
     }
 
@@ -168,7 +170,7 @@ export default function MealLoggerModal({
       loadSavedMeals()
     } catch (error) {
       console.error('Error saving meal:', error)
-      alert(error?.message || 'Failed to save meal')
+      toast(error?.message || 'Failed to save meal', 'error')
     } finally {
       setLoading(false)
     }

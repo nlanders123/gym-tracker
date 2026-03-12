@@ -5,7 +5,9 @@ import { useAuth } from '../contexts/AuthContext'
 import { getProfile } from '../lib/api/profile'
 import { getTodayMeals } from '../lib/api/nutrition'
 import { getSessions, getTemplates, getWorkoutStats } from '../lib/api/workouts'
-import { Utensils, Dumbbell, ChevronRight, Play } from 'lucide-react'
+import { getLatestWeight, logWeight, getWeightHistory } from '../lib/api/weight'
+import { useToast } from '../components/Toast'
+import { Utensils, Dumbbell, ChevronRight, Play, Scale, X } from 'lucide-react'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -16,16 +18,21 @@ export default function Dashboard() {
   const [lastSession, setLastSession] = useState(null)
   const [templates, setTemplates] = useState([])
   const [stats, setStats] = useState({ thisWeek: 0, streak: 0, total: 0 })
+  const [latestWeight, setLatestWeight] = useState(null)
+  const [weightInput, setWeightInput] = useState('')
+  const [showWeightInput, setShowWeightInput] = useState(false)
   const [loading, setLoading] = useState(true)
+  const toast = useToast()
 
   useEffect(() => {
     ;(async () => {
-      const [profileResult, mealsResult, sessionsResult, templatesResult, statsResult] = await Promise.all([
+      const [profileResult, mealsResult, sessionsResult, templatesResult, statsResult, weightResult] = await Promise.all([
         getProfile(user.id),
         getTodayMeals(user.id),
         getSessions(user.id, 1),
         getTemplates(user.id),
         getWorkoutStats(user.id),
+        getLatestWeight(user.id),
       ])
 
       if (profileResult.data) setProfile(profileResult.data)
@@ -33,6 +40,7 @@ export default function Dashboard() {
       if (sessionsResult.data?.length) setLastSession(sessionsResult.data[0])
       if (templatesResult.data) setTemplates(templatesResult.data)
       if (!statsResult.error) setStats(statsResult)
+      if (weightResult.data) setLatestWeight(weightResult.data)
 
       setLoading(false)
     })()
@@ -156,6 +164,83 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Body weight */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-4">
+        <div className="flex justify-between items-center mb-3">
+          <div className="flex items-center gap-2">
+            <Scale size={16} className="text-zinc-500" />
+            <span className="text-sm font-bold text-zinc-400">Body Weight</span>
+          </div>
+          {!showWeightInput && (
+            <button
+              onClick={() => {
+                setShowWeightInput(true)
+                setWeightInput(latestWeight?.weight_kg?.toString() || '')
+              }}
+              className="text-xs font-bold text-zinc-400 hover:text-white transition"
+            >
+              {latestWeight ? 'Update' : 'Log'}
+            </button>
+          )}
+        </div>
+
+        {showWeightInput ? (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault()
+              const kg = parseFloat(weightInput)
+              if (!kg || kg < 20 || kg > 300) {
+                toast('Enter a valid weight', 'error')
+                return
+              }
+              const { data, error } = await logWeight(user.id, kg)
+              if (error) {
+                toast(error.message, 'error')
+                return
+              }
+              setLatestWeight(data)
+              setShowWeightInput(false)
+              toast('Weight logged', 'success')
+            }}
+            className="flex gap-2"
+          >
+            <div className="relative flex-1">
+              <input
+                type="number"
+                step="0.1"
+                value={weightInput}
+                onChange={(e) => setWeightInput(e.target.value)}
+                placeholder="e.g. 85.0"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-white outline-none focus:border-zinc-600"
+                autoFocus
+              />
+              <span className="absolute right-3 top-2.5 text-zinc-600 text-sm">kg</span>
+            </div>
+            <button type="submit" className="bg-white text-zinc-950 font-bold px-4 rounded-xl hover:bg-zinc-200 transition">
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowWeightInput(false)}
+              className="text-zinc-400 hover:text-white px-2"
+            >
+              <X size={16} />
+            </button>
+          </form>
+        ) : latestWeight ? (
+          <div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-bold">{latestWeight.weight_kg} kg</span>
+              <span className="text-xs text-zinc-500">
+                {new Date(latestWeight.date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="text-zinc-500 text-sm">No weight logged yet. Tap Log to start tracking.</div>
+        )}
+      </div>
 
       {/* Quick start */}
       {templates.length > 0 && (
