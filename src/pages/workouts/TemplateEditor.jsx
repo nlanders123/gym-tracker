@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import {
+  getTemplateExercises,
+  addTemplateExercise,
+  removeTemplateExercise,
+  startSession,
+} from '../../lib/api/workouts'
+import { supabase } from '../../lib/supabase'
 import { ArrowLeft, Plus, Play } from 'lucide-react'
-import MigrationRequired from './MigrationRequired'
 
 export default function TemplateEditor() {
   const { id } = useParams()
@@ -14,7 +19,6 @@ export default function TemplateEditor() {
   const [exercises, setExercises] = useState([])
   const [newExercise, setNewExercise] = useState('')
   const [loading, setLoading] = useState(true)
-  const [needsMigration, setNeedsMigration] = useState(false)
 
   useEffect(() => {
     ;(async () => {
@@ -28,6 +32,7 @@ export default function TemplateEditor() {
   }, [id])
 
   const fetchTemplate = async () => {
+    // Template fetch stays direct — single one-off query, not worth abstracting
     const { data, error } = await supabase
       .from('workout_templates')
       .select('*')
@@ -39,36 +44,19 @@ export default function TemplateEditor() {
   }
 
   const fetchExercises = async () => {
-    const { data, error } = await supabase
-      .from('template_exercises')
-      .select('*')
-      .eq('template_id', id)
-      .eq('user_id', user.id)
-      .order('order_index', { ascending: true })
-
-    if (error) {
-      if ((error.message || '').includes('template_exercises')) {
-        setNeedsMigration(true)
-        return
-      }
-      throw error
-    }
-
-    setExercises(data ?? [])
+    const { data, error } = await getTemplateExercises(user.id, id)
+    if (error) { console.error(error); return }
+    setExercises(data)
   }
 
-  const addExercise = async (e) => {
+  const handleAddExercise = async (e) => {
     e.preventDefault()
     const name = newExercise.trim()
     if (!name) return
 
-    const orderIndex = exercises.length
-
-    const { error } = await supabase
-      .from('template_exercises')
-      .insert({ template_id: id, user_id: user.id, name, order_index: orderIndex })
-
+    const { error } = await addTemplateExercise(user.id, id, name, exercises.length)
     if (error) {
+      console.error(error)
       alert(error.message)
       return
     }
@@ -77,16 +65,12 @@ export default function TemplateEditor() {
     await fetchExercises()
   }
 
-  const removeExercise = async (exerciseId) => {
+  const handleRemoveExercise = async (exerciseId) => {
     if (!confirm('Remove this exercise from the template?')) return
 
-    const { error } = await supabase
-      .from('template_exercises')
-      .delete()
-      .eq('id', exerciseId)
-      .eq('user_id', user.id)
-
+    const { error } = await removeTemplateExercise(user.id, exerciseId)
     if (error) {
+      console.error(error)
       alert(error.message)
       return
     }
@@ -94,53 +78,21 @@ export default function TemplateEditor() {
     await fetchExercises()
   }
 
-  const startSession = async () => {
+  const handleStartSession = async () => {
     if (!template) return
 
-    const { data: session, error: sessionErr } = await supabase
-      .from('workout_sessions')
-      .insert({
-        user_id: user.id,
-        template_id: template.id,
-        name: template.name,
-      })
-      .select('*')
-      .single()
-
-    if (sessionErr) {
-      alert(sessionErr.message)
+    const { data: session, error } = await startSession(user.id, template, exercises)
+    if (error) {
+      console.error(error)
+      alert(error.message)
       return
-    }
-
-    if (exercises.length) {
-      const inserts = exercises.map((ex) => ({
-        session_id: session.id,
-        user_id: user.id,
-        name: ex.name,
-        order_index: ex.order_index,
-      }))
-
-      const { error: exErr } = await supabase.from('logged_exercises').insert(inserts)
-      if (exErr) {
-        alert(exErr.message)
-        return
-      }
     }
 
     nav(`/session/${session.id}`)
   }
 
   if (loading) {
-    return <div className="min-h-screen bg-zinc-950 text-zinc-500 p-6">Loading…</div>
-  }
-
-  if (needsMigration) {
-    return (
-      <MigrationRequired
-        title="Workout templates need a one-time migration"
-        body="To enable template exercises, run the Supabase migration file (001). Then refresh this page."
-      />
-    )
+    return <div className="min-h-screen bg-zinc-950 text-zinc-500 p-6">Loading...</div>
   }
 
   return (
@@ -158,14 +110,14 @@ export default function TemplateEditor() {
           <p className="text-sm text-zinc-400">Template</p>
         </div>
         <button
-          onClick={startSession}
+          onClick={handleStartSession}
           className="flex items-center gap-2 bg-white text-zinc-950 font-bold px-4 py-2 rounded-xl hover:bg-zinc-200 transition"
         >
           <Play size={16} /> Start
         </button>
       </header>
 
-      <form onSubmit={addExercise} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-5">
+      <form onSubmit={handleAddExercise} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-5">
         <div className="flex gap-2">
           <input
             value={newExercise}
@@ -198,7 +150,7 @@ export default function TemplateEditor() {
                 <div className="text-xs text-zinc-500">Exercise {ex.order_index + 1}</div>
               </div>
               <button
-                onClick={() => removeExercise(ex.id)}
+                onClick={() => handleRemoveExercise(ex.id)}
                 className="text-xs font-bold text-zinc-400 hover:text-white"
               >
                 Remove
