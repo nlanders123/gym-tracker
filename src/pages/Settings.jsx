@@ -3,8 +3,9 @@ import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/Toast'
 import { getProfile, updateProfile, updateTargets, calculateTargets } from '../lib/api/profile'
 import { exportMeals, exportWorkouts, exportWeight } from '../lib/api/export'
+import { logMeasurement, getLatestMeasurements, MEASUREMENT_TYPES, MEASUREMENT_LABELS } from '../lib/api/measurements'
 import { supabase } from '../lib/supabase'
-import { Calculator, LogOut, Download } from 'lucide-react'
+import { Calculator, LogOut, Download, Ruler } from 'lucide-react'
 
 const ACTIVITY_LABELS = {
   sedentary: 'Sedentary (desk job, little exercise)',
@@ -43,6 +44,11 @@ export default function Settings() {
   const [targets, setTargets] = useState({ protein: 0, fat: 0, carbs: 0 })
   const [editingTargets, setEditingTargets] = useState(false)
 
+  // Measurements
+  const [measurements, setMeasurements] = useState({})
+  const [measurementInputs, setMeasurementInputs] = useState({})
+  const [showMeasurements, setShowMeasurements] = useState(false)
+
   // Calculated preview
   const [preview, setPreview] = useState(null)
 
@@ -64,6 +70,10 @@ export default function Settings() {
         fat: data.target_fat || 0,
         carbs: data.target_carbs || 0,
       })
+      // Load measurements
+      const { data: measData } = await getLatestMeasurements(user.id)
+      if (measData) setMeasurements(measData)
+
       setLoading(false)
     })()
   }, [])
@@ -350,6 +360,58 @@ export default function Settings() {
             Apply calculated targets
           </button>
         </div>
+      </div>
+
+      {/* Body Measurements */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4">
+        <button
+          onClick={() => setShowMeasurements(!showMeasurements)}
+          className="flex items-center gap-2 w-full"
+        >
+          <Ruler size={16} className="text-zinc-400" />
+          <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Body Measurements</div>
+          <span className="ml-auto text-xs text-zinc-600">{showMeasurements ? 'Hide' : 'Show'}</span>
+        </button>
+
+        {showMeasurements && (
+          <div className="mt-4 space-y-2">
+            {MEASUREMENT_TYPES.map((type) => {
+              const current = measurements[type]
+              return (
+                <div key={type} className="flex items-center gap-3">
+                  <span className="text-sm text-zinc-400 w-24">{MEASUREMENT_LABELS[type]}</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.1"
+                    placeholder={current ? `${current.value_cm}` : 'cm'}
+                    value={measurementInputs[type] || ''}
+                    onChange={(e) => setMeasurementInputs({ ...measurementInputs, [type]: e.target.value })}
+                    className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-zinc-600"
+                  />
+                  <button
+                    onClick={async () => {
+                      const val = parseFloat(measurementInputs[type])
+                      if (!val) return
+                      const { error } = await logMeasurement(user.id, type, val)
+                      if (error) { toast(error.message, 'error'); return }
+                      setMeasurements({ ...measurements, [type]: { value_cm: val, date: new Date().toISOString().split('T')[0] } })
+                      setMeasurementInputs({ ...measurementInputs, [type]: '' })
+                      toast(`${MEASUREMENT_LABELS[type]} saved`, 'success')
+                    }}
+                    disabled={!measurementInputs[type]}
+                    className="text-xs font-bold text-zinc-400 bg-zinc-800 px-3 py-2 rounded-xl hover:bg-zinc-700 transition disabled:opacity-30"
+                  >
+                    Save
+                  </button>
+                  {current && (
+                    <span className="text-xs text-zinc-600 w-16 text-right">{current.value_cm} cm</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Data Export */}
