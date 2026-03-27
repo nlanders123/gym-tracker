@@ -265,14 +265,13 @@ export default function Nutrition() {
             ))}
           </div>
 
-          {/* Micronutrients row */}
-          {(totals.fiber > 0 || totals.sugar > 0 || totals.sodium > 0) && (
-            <div className="flex gap-4 text-xs text-zinc-500 border-t border-zinc-800/50 pt-3">
-              {totals.fiber > 0 && <span>Fiber: <span className="text-zinc-300">{totals.fiber}g</span></span>}
-              {totals.sugar > 0 && <span>Sugar: <span className="text-zinc-300">{totals.sugar}g</span></span>}
-              {totals.sodium > 0 && <span>Sodium: <span className="text-zinc-300">{totals.sodium}mg</span></span>}
-            </div>
-          )}
+          {/* Net carbs + micronutrients row */}
+          <div className="flex flex-wrap gap-4 text-xs text-zinc-500 border-t border-zinc-800/50 pt-3">
+            <span>Net carbs: <span className="text-zinc-300">{Math.max(0, totals.carbs - (totals.fiber || 0))}g</span></span>
+            {totals.fiber > 0 && <span>Fiber: <span className="text-zinc-300">{totals.fiber}g</span></span>}
+            {totals.sugar > 0 && <span>Sugar: <span className="text-zinc-300">{totals.sugar}g</span></span>}
+            {totals.sodium > 0 && <span>Sodium: <span className="text-zinc-300">{totals.sodium}mg</span></span>}
+          </div>
         </div>
       )}
 
@@ -331,11 +330,10 @@ export default function Nutrition() {
                   <div className="text-[11px] text-zinc-500">carbs</div>
                 </div>
               </div>
-              {weekSummary.water_ml > 0 && (
-                <div className="text-xs text-zinc-500 mt-2 border-t border-zinc-800/50 pt-2">
-                  Avg water: <span className="text-zinc-300">{weekSummary.water_ml >= 1000 ? `${(weekSummary.water_ml / 1000).toFixed(1)}L` : `${weekSummary.water_ml}ml`}</span>/day
-                </div>
-              )}
+              <div className="text-xs text-zinc-500 mt-2 border-t border-zinc-800/50 pt-2 flex flex-wrap gap-3">
+                {weekSummary.fiber > 0 && <span>Net carbs: <span className="text-zinc-300">{Math.max(0, weekSummary.carbs - weekSummary.fiber)}g</span></span>}
+                {weekSummary.water_ml > 0 && <span>Avg water: <span className="text-zinc-300">{weekSummary.water_ml >= 1000 ? `${(weekSummary.water_ml / 1000).toFixed(1)}L` : `${weekSummary.water_ml}ml`}</span>/day</span>}
+              </div>
             </div>
           )}
         </div>
