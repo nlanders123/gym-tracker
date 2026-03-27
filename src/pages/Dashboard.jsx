@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { getProfile } from '../lib/api/profile'
 import { getTodayMeals } from '../lib/api/nutrition'
 import { getSessions, getTemplates, getWorkoutStats } from '../lib/api/workouts'
 import { getLatestWeight, logWeight, getWeightHistory } from '../lib/api/weight'
 import { useToast } from '../components/Toast'
-import { Utensils, Dumbbell, ChevronRight, Play, Scale, X, TrendingUp, TrendingDown } from 'lucide-react'
+import { Utensils, Dumbbell, ChevronRight, Play, Scale, X, TrendingUp, TrendingDown, Droplets, Plus } from 'lucide-react'
+import { addWater } from '../lib/api/nutrition'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -48,10 +48,6 @@ export default function Dashboard() {
       setLoading(false)
     })()
   }, [])
-
-  const handleSignOut = () => {
-    supabase.auth.signOut()
-  }
 
   if (loading) {
     return (
@@ -102,16 +98,11 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white p-6 pb-24">
-      <header className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-2xl font-bold">Apex</h1>
-          <p className="text-zinc-500 text-sm">
-            {new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </p>
-        </div>
-        <button onClick={handleSignOut} className="text-sm font-medium text-zinc-400 hover:text-white">
-          Sign out
-        </button>
+      <header className="mb-8">
+        <h1 className="text-2xl font-bold">Apex</h1>
+        <p className="text-zinc-500 text-sm">
+          {new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
+        </p>
       </header>
 
       {/* Today's nutrition summary */}
@@ -158,6 +149,43 @@ export default function Dashboard() {
           ))}
         </div>
       </button>
+
+      {/* Quick actions */}
+      <div className="grid grid-cols-4 gap-2 mb-4">
+        {['Breakfast', 'Lunch', 'Dinner', 'Snacks'].map((label) => (
+          <button
+            key={label}
+            onClick={() => nav(`/nutrition?add=${label.toLowerCase()}`)}
+            className="bg-zinc-900 border border-zinc-800 rounded-xl py-3 text-center hover:bg-zinc-800/50 transition active:scale-95"
+          >
+            <Plus size={14} className="mx-auto text-zinc-400 mb-1" />
+            <div className="text-[10px] font-bold text-zinc-500">{label}</div>
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <button
+          onClick={async () => {
+            const today = new Date().toISOString().split('T')[0]
+            const { error } = await addWater(user.id, 500, today)
+            if (error) toast(error.message, 'error')
+            else toast('+500ml water', 'success')
+          }}
+          className="bg-zinc-900 border border-zinc-800 rounded-xl py-3 flex items-center justify-center gap-2 hover:bg-zinc-800/50 transition active:scale-95"
+        >
+          <Droplets size={14} className="text-blue-400" />
+          <span className="text-xs font-bold text-zinc-400">+500ml Water</span>
+        </button>
+        {templates.length > 0 && (
+          <button
+            onClick={() => nav(`/template/${templates[0].id}`)}
+            className="bg-zinc-900 border border-zinc-800 rounded-xl py-3 flex items-center justify-center gap-2 hover:bg-zinc-800/50 transition active:scale-95"
+          >
+            <Play size={14} className="text-zinc-400" />
+            <span className="text-xs font-bold text-zinc-400 truncate">{templates[0].name}</span>
+          </button>
+        )}
+      </div>
 
       {/* Last workout */}
       {lastSession && (
