@@ -8,6 +8,7 @@ import MealLoggerModal from '../components/MealLoggerModal'
 import RecipeBuilderModal from '../components/RecipeBuilderModal'
 
 const MEAL_CATEGORIES = ['Breakfast', 'Lunch', 'Dinner', 'Snacks']
+const MEAL_CAL_SPLIT = { Breakfast: 0.25, Lunch: 0.30, Dinner: 0.35, Snacks: 0.10 }
 const WATER_INCREMENTS = [250, 500]
 
 function labelToEnum(label) {
@@ -360,15 +361,18 @@ export default function Nutrition() {
         {MEAL_CATEGORIES.map((mealLabel) => {
           const mealsInCategory = meals.filter((m) => m.category === labelToEnum(mealLabel))
           const categoryCalories = mealsInCategory.reduce((sum, m) => sum + (m.calories || 0), 0)
+          const categoryTarget = Math.round((profile?.target_calories || 0) * (MEAL_CAL_SPLIT[mealLabel] || 0))
+          const categoryRemaining = Math.max(0, categoryTarget - categoryCalories)
 
           return (
             <div key={mealLabel} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
               <div className="flex justify-between items-center mb-3">
                 <div className="flex items-baseline gap-2">
                   <h3 className="font-bold text-lg">{mealLabel}</h3>
-                  {categoryCalories > 0 && (
-                    <span className="text-xs text-zinc-500 font-medium">{categoryCalories} cal</span>
-                  )}
+                  <span className="text-xs text-zinc-500 font-medium">
+                    {categoryCalories} <span className="text-zinc-600">/ {categoryTarget} cal</span>
+                    {categoryRemaining > 0 && <span className="text-zinc-600 ml-1">({categoryRemaining} left)</span>}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
