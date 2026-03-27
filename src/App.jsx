@@ -9,6 +9,7 @@ import Navigation from './components/Navigation'
 import TemplateEditor from './pages/workouts/TemplateEditor'
 import SessionLogger from './pages/workouts/SessionLogger'
 import ExerciseHistory from './pages/workouts/ExerciseHistory'
+import Settings from './pages/Settings'
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useAuth()
@@ -33,6 +34,7 @@ function AppRoutes() {
       <Route path="/template/:id" element={<ProtectedRoute><TemplateEditor /></ProtectedRoute>} />
       <Route path="/session/:id" element={<ProtectedRoute><SessionLogger /></ProtectedRoute>} />
       <Route path="/exercise-history" element={<ProtectedRoute><ExerciseHistory /></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
     </Routes>
   )
 }

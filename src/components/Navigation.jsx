@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Dumbbell, UtensilsCrossed } from 'lucide-react'
+import { Home, Dumbbell, UtensilsCrossed, Settings } from 'lucide-react'
 
 const tabs = [
   { to: '/', icon: Home, label: 'Home' },
   { to: '/workouts', icon: Dumbbell, label: 'Workout' },
   { to: '/nutrition', icon: UtensilsCrossed, label: 'Food' },
+  { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 
 export default function Navigation() {
