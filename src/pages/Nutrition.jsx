@@ -282,12 +282,19 @@ export default function Nutrition() {
             ))}
           </div>
 
-          {/* Net carbs + micronutrients row */}
-          <div className="flex flex-wrap gap-4 text-xs text-zinc-500 border-t border-zinc-800/50 pt-3">
+          {/* Net carbs + micronutrients */}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500 border-t border-zinc-800/50 pt-3">
             <span>Net carbs: <span className="text-zinc-300">{Math.max(0, totals.carbs - (totals.fiber || 0))}g</span></span>
             {totals.fiber > 0 && <span>Fiber: <span className="text-zinc-300">{totals.fiber}g</span></span>}
             {totals.sugar > 0 && <span>Sugar: <span className="text-zinc-300">{totals.sugar}g</span></span>}
+            {totals.saturated_fat > 0 && <span>Sat fat: <span className="text-zinc-300">{totals.saturated_fat}g</span></span>}
+            {totals.cholesterol > 0 && <span>Cholesterol: <span className="text-zinc-300">{totals.cholesterol}mg</span></span>}
             {totals.sodium > 0 && <span>Sodium: <span className="text-zinc-300">{totals.sodium}mg</span></span>}
+            {totals.potassium > 0 && <span>Potassium: <span className="text-zinc-300">{totals.potassium}mg</span></span>}
+            {totals.calcium > 0 && <span>Calcium: <span className="text-zinc-300">{totals.calcium}mg</span></span>}
+            {totals.iron > 0 && <span>Iron: <span className="text-zinc-300">{totals.iron}mg</span></span>}
+            {totals.vitamin_a > 0 && <span>Vit A: <span className="text-zinc-300">{totals.vitamin_a}µg</span></span>}
+            {totals.vitamin_c > 0 && <span>Vit C: <span className="text-zinc-300">{totals.vitamin_c}mg</span></span>}
           </div>
         </div>
       )}

@@ -27,7 +27,7 @@ async function ensureDailyLog(userId, date) {
   return { data: created, error: createErr }
 }
 
-const EMPTY_TOTALS = { protein: 0, fat: 0, carbs: 0, calories: 0, fiber: 0, sodium: 0, sugar: 0 }
+const EMPTY_TOTALS = { protein: 0, fat: 0, carbs: 0, calories: 0, fiber: 0, sodium: 0, sugar: 0, saturated_fat: 0, trans_fat: 0, cholesterol: 0, potassium: 0, vitamin_a: 0, vitamin_c: 0, calcium: 0, iron: 0 }
 
 export async function getTodayMeals(userId) {
   return getMealsForDate(userId, isoDate(new Date()))
@@ -61,6 +61,14 @@ export async function getMealsForDate(userId, dateStr) {
       calories: acc.calories + (meal.calories || 0),
       fiber: acc.fiber + (meal.fiber || 0),
       sodium: acc.sodium + (meal.sodium || 0),
+      saturated_fat: acc.saturated_fat + (meal.saturated_fat || 0),
+      trans_fat: acc.trans_fat + (meal.trans_fat || 0),
+      cholesterol: acc.cholesterol + (meal.cholesterol || 0),
+      potassium: acc.potassium + (meal.potassium || 0),
+      vitamin_a: acc.vitamin_a + (meal.vitamin_a || 0),
+      vitamin_c: acc.vitamin_c + (meal.vitamin_c || 0),
+      calcium: acc.calcium + (meal.calcium || 0),
+      iron: acc.iron + (meal.iron || 0),
       sugar: acc.sugar + (meal.sugar || 0),
     }),
     { ...EMPTY_TOTALS },
@@ -69,7 +77,8 @@ export async function getMealsForDate(userId, dateStr) {
   return { meals: safeMeals, totals, waterMl: logData.water_ml || 0, error: null }
 }
 
-export async function logMeal(userId, { category, name, protein, fat, carbs, fiber, sodium, sugar }, dateStr) {
+export async function logMeal(userId, meal, dateStr) {
+  const { category, name, protein, fat, carbs, fiber, sodium, sugar, saturated_fat, trans_fat, cholesterol, potassium, vitamin_a, vitamin_c, calcium, iron } = meal
   const date = dateStr || isoDate(new Date())
   const calories = protein * 4 + carbs * 4 + fat * 9
 
@@ -90,6 +99,14 @@ export async function logMeal(userId, { category, name, protein, fat, carbs, fib
       fiber: fiber || null,
       sodium: sodium || null,
       sugar: sugar || null,
+      saturated_fat: saturated_fat || null,
+      trans_fat: trans_fat || null,
+      cholesterol: cholesterol || null,
+      potassium: potassium || null,
+      vitamin_a: vitamin_a || null,
+      vitamin_c: vitamin_c || null,
+      calcium: calcium || null,
+      iron: iron || null,
     })
     .select('*')
     .single()

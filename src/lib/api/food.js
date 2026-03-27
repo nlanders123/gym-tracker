@@ -25,6 +25,14 @@ export async function lookupBarcode(barcode) {
     const fiber = Math.round(n['fiber_serving'] ?? n['fiber_100g'] ?? 0)
     const sodium = Math.round((n['sodium_serving'] ?? n['sodium_100g'] ?? 0) * 1000) // g → mg
     const sugar = Math.round(n['sugars_serving'] ?? n['sugars_100g'] ?? 0)
+    const saturated_fat = Math.round(n['saturated-fat_serving'] ?? n['saturated-fat_100g'] ?? 0)
+    const trans_fat = Math.round(n['trans-fat_serving'] ?? n['trans-fat_100g'] ?? 0)
+    const cholesterol = Math.round((n['cholesterol_serving'] ?? n['cholesterol_100g'] ?? 0) * 1000) // g → mg
+    const potassium = Math.round((n['potassium_serving'] ?? n['potassium_100g'] ?? 0) * 1000) // g → mg
+    const vitamin_a = Math.round(n['vitamin-a_serving'] ?? n['vitamin-a_100g'] ?? 0) // µg
+    const vitamin_c = Math.round(n['vitamin-c_serving'] ?? n['vitamin-c_100g'] ?? 0) // mg
+    const calcium = Math.round((n['calcium_serving'] ?? n['calcium_100g'] ?? 0) * 1000) // g → mg
+    const iron = Math.round((n['iron_serving'] ?? n['iron_100g'] ?? 0) * 1000) // g → mg
 
     const name = [p.brands, p.product_name].filter(Boolean).join(' — ') || 'Unknown product'
 
@@ -38,6 +46,14 @@ export async function lookupBarcode(barcode) {
         fiber,
         sodium,
         sugar,
+        saturated_fat,
+        trans_fat,
+        cholesterol,
+        potassium,
+        vitamin_a,
+        vitamin_c,
+        calcium,
+        iron,
         servingSize: p.serving_size || '100g',
         isPerServing: !!(n['proteins_serving'] || n['fat_serving']),
       },
@@ -71,6 +87,14 @@ export async function searchFood(query, limit = 10) {
         fiber: Math.round(n['fiber_serving'] ?? n['fiber_100g'] ?? 0),
         sodium: Math.round((n['sodium_serving'] ?? n['sodium_100g'] ?? 0) * 1000),
         sugar: Math.round(n['sugars_serving'] ?? n['sugars_100g'] ?? 0),
+        saturated_fat: Math.round(n['saturated-fat_serving'] ?? n['saturated-fat_100g'] ?? 0),
+        trans_fat: Math.round(n['trans-fat_serving'] ?? n['trans-fat_100g'] ?? 0),
+        cholesterol: Math.round((n['cholesterol_serving'] ?? n['cholesterol_100g'] ?? 0) * 1000),
+        potassium: Math.round((n['potassium_serving'] ?? n['potassium_100g'] ?? 0) * 1000),
+        vitamin_a: Math.round(n['vitamin-a_serving'] ?? n['vitamin-a_100g'] ?? 0),
+        vitamin_c: Math.round(n['vitamin-c_serving'] ?? n['vitamin-c_100g'] ?? 0),
+        calcium: Math.round((n['calcium_serving'] ?? n['calcium_100g'] ?? 0) * 1000),
+        iron: Math.round((n['iron_serving'] ?? n['iron_100g'] ?? 0) * 1000),
         servingSize: p.serving_size || '100g',
       }
     })
