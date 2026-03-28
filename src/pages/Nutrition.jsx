@@ -42,7 +42,7 @@ export default function Nutrition() {
 
   const [selectedDate, setSelectedDate] = useState(isoDate(new Date()))
   const [meals, setMeals] = useState([])
-  const [totals, setTotals] = useState({ protein: 0, fat: 0, carbs: 0, calories: 0, fiber: 0, sodium: 0, sugar: 0 })
+  const [totals, setTotals] = useState({ protein: 0, fat: 0, carbs: 0, calories: 0, fiber: 0, sodium: 0, sugar: 0, saturated_fat: 0, trans_fat: 0, cholesterol: 0, potassium: 0, vitamin_a: 0, vitamin_c: 0, calcium: 0, iron: 0 })
   const [waterMl, setWaterMl] = useState(0)
 
   const [activeModalMealType, setActiveModalMealType] = useState(null)

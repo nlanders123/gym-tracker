@@ -213,7 +213,7 @@ export async function copyMealsFromDate(userId, category, fromDateStr, toDateStr
   const { data: tLog, error: tErr } = await ensureDailyLog(userId, toDateStr)
   if (tErr) return { error: tErr }
 
-  // Copy meals
+  // Copy meals (including all micronutrients)
   const inserts = srcMeals.map((m) => ({
     daily_log_id: tLog.id,
     user_id: userId,
@@ -226,6 +226,14 @@ export async function copyMealsFromDate(userId, category, fromDateStr, toDateStr
     fiber: m.fiber || 0,
     sodium: m.sodium || 0,
     sugar: m.sugar || 0,
+    saturated_fat: m.saturated_fat || null,
+    trans_fat: m.trans_fat || null,
+    cholesterol: m.cholesterol || null,
+    potassium: m.potassium || null,
+    vitamin_a: m.vitamin_a || null,
+    vitamin_c: m.vitamin_c || null,
+    calcium: m.calcium || null,
+    iron: m.iron || null,
   }))
 
   const { error: insErr } = await supabase.from('logged_meals').insert(inserts)
