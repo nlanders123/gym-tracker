@@ -49,14 +49,6 @@ export default function Dashboard() {
     })()
   }, [])
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-zinc-950 p-6 flex items-center justify-center text-zinc-500">
-        Loading...
-      </div>
-    )
-  }
-
   const weightChart = useMemo(() => {
     if (weightHistory.length < 2) return null
     const points = [...weightHistory].reverse().map((h) => h.weight_kg)
@@ -90,6 +82,14 @@ export default function Dashboard() {
       endDate: new Date(newest.date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }),
     }
   }, [weightHistory])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 p-6 flex items-center justify-center text-zinc-500">
+        Loading...
+      </div>
+    )
+  }
 
   const calorieTarget = profile?.target_calories || 0
   const caloriePercent = calorieTarget > 0 ? Math.min(100, Math.round((todayTotals.calories / calorieTarget) * 100)) : 0
