@@ -42,6 +42,8 @@ export default function MealLoggerModal({
     fiber: '',
     sodium: '',
     sugar: '',
+    serving_size: '1',
+    serving_unit: '',
   })
 
   // Food search state
@@ -50,12 +52,18 @@ export default function MealLoggerModal({
   const [searching, setSearching] = useState(false)
   const [scanError, setScanError] = useState(null)
 
+  // Quantity picker state (for logging saved meals with serving sizes)
+  const [quantityMeal, setQuantityMeal] = useState(null)
+  const [quantity, setQuantity] = useState(1)
+
   const isEdit = !!existingMeal
   const category = toMealEnum(mealType)
 
   useEffect(() => {
     if (!isOpen) return
     setScanError(null)
+    setQuantityMeal(null)
+    setQuantity(1)
     if (existingMeal) {
       setForm({
         name: existingMeal.name ?? 'Quick Add',
@@ -65,10 +73,12 @@ export default function MealLoggerModal({
         fiber: String(existingMeal.fiber ?? ''),
         sodium: String(existingMeal.sodium ?? ''),
         sugar: String(existingMeal.sugar ?? ''),
+        serving_size: '1',
+        serving_unit: '',
       })
       setView('form')
     } else {
-      setForm({ name: 'Quick Add', protein: '', fat: '', carbs: '', fiber: '', sodium: '', sugar: '' })
+      setForm({ name: 'Quick Add', protein: '', fat: '', carbs: '', fiber: '', sodium: '', sugar: '', serving_size: '1', serving_unit: '' })
       loadSavedMeals()
     }
   }, [isOpen, existingMeal])
@@ -175,10 +185,22 @@ export default function MealLoggerModal({
     }
   }
 
-  const handleLogSaved = async (meal) => {
+  const handleLogSaved = (meal) => {
+    // If the meal has a serving unit, show quantity picker
+    // Otherwise log instantly (backwards compatible)
+    if (meal.serving_unit) {
+      setQuantityMeal(meal)
+      setQuantity(1)
+      setView('quantity')
+    } else {
+      logSavedInstant(meal, 1)
+    }
+  }
+
+  const logSavedInstant = async (meal, qty) => {
     setLoading(true)
     try {
-      const { error } = await logSavedMeal(user.id, meal, selectedDate)
+      const { error } = await logSavedMeal(user.id, meal, selectedDate, qty)
       if (error) throw error
       onLogSuccess()
       onClose()
@@ -211,8 +233,11 @@ export default function MealLoggerModal({
         fiber: Number(formData.fiber) || null,
         sodium: Number(formData.sodium) || null,
         sugar: Number(formData.sugar) || null,
+        serving_size: Number(formData.serving_size) || 1,
+        serving_unit: formData.serving_unit.trim() || null,
       })
       if (error) throw error
+      toast('Saved to favourites', 'success')
       loadSavedMeals()
     } catch (error) {
       console.error('Error saving meal:', error)
@@ -286,6 +311,130 @@ export default function MealLoggerModal({
     setSearchResults([])
     setSearchQuery('')
     setView('form')
+  }
+
+  // Quantity picker view (for saved meals with serving sizes)
+  if (view === 'quantity' && quantityMeal) {
+    const q = quantity
+    const scaledCal = Math.round((quantityMeal.calories || 0) * q)
+    const scaledP = Math.round((quantityMeal.protein || 0) * q)
+    const scaledF = Math.round((quantityMeal.fat || 0) * q)
+    const scaledC = Math.round((quantityMeal.carbs || 0) * q)
+    const servingLabel = quantityMeal.serving_unit
+      ? `${q * (quantityMeal.serving_size || 1)} ${quantityMeal.serving_unit}`
+      : `${q} serving${q !== 1 ? 's' : ''}`
+
+    const QUICK_AMOUNTS = [0.25, 0.5, 1, 1.5, 2, 3]
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="w-full max-w-md bg-zinc-900 rounded-t-3xl sm:rounded-2xl border border-zinc-800 shadow-2xl p-6">
+          <div className="flex justify-between items-center mb-5">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => { setQuantityMeal(null); setView('pick') }}
+                className="p-2 bg-zinc-800 rounded-full hover:bg-zinc-700 text-zinc-400 hover:text-white transition"
+              >
+                <ChevronLeft size={16} strokeWidth={2.5} />
+              </button>
+              <h2 className="text-xl font-bold">How much?</h2>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 bg-zinc-800 rounded-full hover:bg-zinc-700 text-zinc-400 hover:text-white transition"
+            >
+              <X size={16} strokeWidth={2.5} />
+            </button>
+          </div>
+
+          <div className="text-center mb-5">
+            <div className="text-lg font-bold">{quantityMeal.name}</div>
+            <div className="text-xs text-zinc-500 mt-1">
+              Per {quantityMeal.serving_size || 1} {quantityMeal.serving_unit || 'serving'}:
+              {' '}{quantityMeal.calories} cal · {quantityMeal.protein}P · {quantityMeal.fat}F · {quantityMeal.carbs}C
+            </div>
+          </div>
+
+          {/* Quick amount buttons */}
+          <div className="flex flex-wrap justify-center gap-2 mb-4">
+            {QUICK_AMOUNTS.map((amt) => (
+              <button
+                key={amt}
+                onClick={() => setQuantity(amt)}
+                className={`px-3 py-2 rounded-xl text-sm font-bold border transition ${
+                  quantity === amt
+                    ? 'bg-white text-zinc-950 border-white'
+                    : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:border-zinc-600'
+                }`}
+              >
+                {amt}
+              </button>
+            ))}
+          </div>
+
+          {/* Custom amount input */}
+          <div className="flex items-center justify-center gap-3 mb-5">
+            <button
+              onClick={() => setQuantity(Math.max(0.1, +(quantity - 0.1).toFixed(2)))}
+              className="w-10 h-10 flex items-center justify-center bg-zinc-800 rounded-xl text-white font-bold text-lg hover:bg-zinc-700 transition"
+            >
+              -
+            </button>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              min="0.1"
+              value={quantity}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value)
+                if (!isNaN(v) && v > 0) setQuantity(v)
+              }}
+              className="w-20 text-center bg-zinc-950 border border-zinc-800 rounded-xl px-2 py-2.5 text-white text-lg font-bold outline-none focus:border-zinc-600"
+            />
+            <button
+              onClick={() => setQuantity(+(quantity + 0.1).toFixed(2))}
+              className="w-10 h-10 flex items-center justify-center bg-zinc-800 rounded-xl text-white font-bold text-lg hover:bg-zinc-700 transition"
+            >
+              +
+            </button>
+          </div>
+
+          {/* Scaled preview */}
+          <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 mb-5">
+            <div className="text-xs font-bold text-zinc-500 mb-2">{servingLabel}</div>
+            <div className="grid grid-cols-4 gap-3 text-center">
+              <div>
+                <div className="text-lg font-bold">{scaledCal}</div>
+                <div className="text-[11px] text-zinc-500">cal</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-blue-400">{scaledP}g</div>
+                <div className="text-[11px] text-zinc-500">protein</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-amber-400">{scaledF}g</div>
+                <div className="text-[11px] text-zinc-500">fat</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-green-400">{scaledC}g</div>
+                <div className="text-[11px] text-zinc-500">carbs</div>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={() => logSavedInstant(quantityMeal, quantity)}
+            disabled={loading}
+            className="w-full bg-white text-zinc-950 font-bold rounded-xl py-3.5 hover:bg-zinc-200 transition active:scale-[0.98] disabled:opacity-50"
+          >
+            {loading ? 'Logging...' : `Log ${servingLabel}`}
+          </button>
+        </div>
+      </div>
+    )
   }
 
   // Barcode scanner view
@@ -425,6 +574,11 @@ export default function MealLoggerModal({
                           <div className="text-white font-medium text-sm">{meal.name}</div>
                           <div className="text-zinc-500 text-xs mt-0.5">
                             {meal.calories} cal · {meal.protein}P · {meal.fat}F · {meal.carbs}C
+                            {meal.serving_unit && (
+                              <span className="text-zinc-600 ml-1">
+                                per {meal.serving_size || 1} {meal.serving_unit}
+                              </span>
+                            )}
                           </div>
                         </div>
                         <button
@@ -565,6 +719,34 @@ export default function MealLoggerModal({
               required
             />
           </div>
+
+          {/* Serving size (only shown when creating, not editing) */}
+          {!isEdit && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-1">Serving size</label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="any"
+                  value={formData.serving_size}
+                  onChange={(e) => setForm({ ...formData, serving_size: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:border-zinc-500 outline-none"
+                  placeholder="1"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-1">Unit</label>
+                <input
+                  type="text"
+                  value={formData.serving_unit}
+                  onChange={(e) => setForm({ ...formData, serving_unit: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:border-zinc-500 outline-none"
+                  placeholder="g, cup, slice, scoop..."
+                />
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-3">
             {[

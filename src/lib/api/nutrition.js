@@ -374,7 +374,7 @@ export async function getSavedMeals(userId) {
   return { data: data ?? [], error }
 }
 
-export async function saveMeal(userId, { name, category, protein, fat, carbs, fiber, sodium, sugar }) {
+export async function saveMeal(userId, { name, category, protein, fat, carbs, fiber, sodium, sugar, serving_size, serving_unit }) {
   const calories = protein * 4 + carbs * 4 + fat * 9
 
   const { data, error } = await supabase
@@ -384,6 +384,8 @@ export async function saveMeal(userId, { name, category, protein, fat, carbs, fi
       fiber: fiber || null,
       sodium: sodium || null,
       sugar: sugar || null,
+      serving_size: serving_size || 1,
+      serving_unit: serving_unit || null,
     })
     .select('*')
     .single()
@@ -415,26 +417,45 @@ export async function deleteSavedMeal(userId, mealId) {
   return { error }
 }
 
-export async function logSavedMeal(userId, savedMeal, dateStr) {
+export async function logSavedMeal(userId, savedMeal, dateStr, quantity = 1) {
   const date = dateStr || isoDate(new Date())
 
   const { data: log, error: logErr } = await ensureDailyLog(userId, date)
   if (logErr) return { data: null, error: logErr }
+
+  // Scale macros by quantity (quantity is relative to serving_size=1)
+  const q = quantity
+  const scale = (v) => v != null ? Math.round(v * q) : null
+
+  const servingLabel = savedMeal.serving_unit
+    ? `${quantity * (savedMeal.serving_size || 1)} ${savedMeal.serving_unit}`
+    : null
+  const name = servingLabel && quantity !== 1
+    ? `${savedMeal.name} (${servingLabel})`
+    : savedMeal.name
 
   const { data, error } = await supabase
     .from('logged_meals')
     .insert({
       daily_log_id: log.id,
       user_id: userId,
-      name: savedMeal.name,
+      name,
       category: savedMeal.category,
-      protein: savedMeal.protein,
-      fat: savedMeal.fat,
-      carbs: savedMeal.carbs,
-      calories: savedMeal.calories,
-      fiber: savedMeal.fiber || null,
-      sodium: savedMeal.sodium || null,
-      sugar: savedMeal.sugar || null,
+      protein: scale(savedMeal.protein),
+      fat: scale(savedMeal.fat),
+      carbs: scale(savedMeal.carbs),
+      calories: scale(savedMeal.calories),
+      fiber: scale(savedMeal.fiber),
+      sodium: scale(savedMeal.sodium),
+      sugar: scale(savedMeal.sugar),
+      saturated_fat: scale(savedMeal.saturated_fat),
+      trans_fat: scale(savedMeal.trans_fat),
+      cholesterol: scale(savedMeal.cholesterol),
+      potassium: scale(savedMeal.potassium),
+      vitamin_a: scale(savedMeal.vitamin_a),
+      vitamin_c: scale(savedMeal.vitamin_c),
+      calcium: scale(savedMeal.calcium),
+      iron: scale(savedMeal.iron),
     })
     .select('*')
     .single()
