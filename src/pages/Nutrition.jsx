@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Copy, ChevronLeft, ChevronRight, Droplets, ChefHat, BarChart3, Calendar, MoreHorizontal } from 'lucide-react'
+import CalorieRing from '../components/CalorieRing'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/Toast'
 import { getProfile, updateTargets, updateProfile } from '../lib/api/profile'
@@ -284,38 +285,35 @@ export default function Nutrition() {
         </button>
       </div>
 
-      {/* ─── NUTRIENTS REMAINING (MFP-style) ─── */}
+      {/* ─── CALORIE RING + MACRO BARS (MFP-style) ─── */}
       {!isEditingTargets && (
-        <div className="px-4 py-4 border-b border-zinc-800">
-          <div className="text-xs text-zinc-400 font-bold mb-3">
-            Nutrients Remaining
-            {activePlans.length > 0 && effectiveCalorieTarget !== (profile?.target_calories || 0) && (
-              <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded ${
+        <div className="px-4 py-5 border-b border-zinc-800">
+          {activePlans.length > 0 && effectiveCalorieTarget !== (profile?.target_calories || 0) && (
+            <div className="mb-3 text-center">
+              <span className={`text-[10px] px-2 py-1 rounded-full font-bold ${
                 activePlans[0]?.type === 'event' ? 'text-amber-400 bg-amber-400/10' : 'text-blue-400 bg-blue-400/10'
               }`}>
-                {activePlans[0]?.type === 'event' ? 'EVENT DAY' : 'BANKING'}
+                {activePlans[0]?.type === 'event' ? 'EVENT DAY' : 'CALORIE BANKING'}
               </span>
-            )}
-          </div>
-          <div className="grid grid-cols-4 gap-2 text-center">
-            {[
-              { label: 'Carbs (g)', val: remaining.carbs, color: remaining.carbs < 0 ? 'text-red-400' : 'text-white' },
-              { label: 'Fat (g)', val: remaining.fat, color: remaining.fat < 0 ? 'text-red-400' : 'text-white' },
-              { label: 'Protein (g)', val: remaining.protein, color: remaining.protein < 0 ? 'text-red-400' : 'text-white' },
-              { label: 'Calories', val: remaining.calories, color: remaining.calories < 0 ? 'text-red-400' : 'text-blue-400' },
-            ].map((n) => (
-              <div key={n.label}>
-                <div className={`text-xl font-bold ${n.color}`}>{n.val}</div>
-                <div className="text-[10px] text-zinc-500">{n.label}</div>
-              </div>
-            ))}
-          </div>
+            </div>
+          )}
+
+          <CalorieRing
+            calories={totals.calories}
+            calorieTarget={effectiveCalorieTarget}
+            protein={totals.protein}
+            proteinTarget={profile?.target_protein || 0}
+            fat={totals.fat}
+            fatTarget={profile?.target_fat || 0}
+            carbs={totals.carbs}
+            carbsTarget={profile?.target_carbs || 0}
+          />
 
           {/* Micronutrients (expandable) */}
           {showMicros && (
             <div className="mt-4 pt-3 border-t border-zinc-800/50">
               <div className="text-[10px] text-zinc-500 font-bold uppercase mb-2">Micronutrients</div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
                 {[
                   { label: 'Fiber', val: totals.fiber, target: profile?.target_fiber, unit: 'g' },
                   { label: 'Sugar', val: totals.sugar, target: profile?.target_sugar, unit: 'g' },
@@ -327,15 +325,19 @@ export default function Nutrition() {
                   { label: 'Iron', val: totals.iron, target: profile?.target_iron, unit: 'mg' },
                   { label: 'Vit A', val: totals.vitamin_a, target: profile?.target_vitamin_a, unit: 'µg' },
                   { label: 'Vit C', val: totals.vitamin_c, target: profile?.target_vitamin_c, unit: 'mg' },
-                ].map((m) => (
-                  <div key={m.label} className="flex justify-between text-zinc-500">
-                    <span>{m.label}</span>
-                    <span>
-                      <span className={m.val > 0 ? 'text-zinc-300' : ''}>{m.val || 0}</span>
-                      {m.target ? <span className="text-zinc-600"> / {m.target}{m.unit}</span> : <span className="text-zinc-700"> {m.unit}</span>}
-                    </span>
-                  </div>
-                ))}
+                ].map((m) => {
+                  const pct = m.target ? (m.val / m.target) * 100 : 0
+                  const microColor = pct > 100 ? 'text-red-400' : pct > 80 ? 'text-yellow-400' : 'text-zinc-300'
+                  return (
+                    <div key={m.label} className="flex justify-between text-zinc-500">
+                      <span>{m.label}</span>
+                      <span>
+                        <span className={m.val > 0 ? microColor : ''}>{m.val || 0}</span>
+                        {m.target ? <span className="text-zinc-600"> / {m.target}{m.unit}</span> : <span className="text-zinc-700"> {m.unit}</span>}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}

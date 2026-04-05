@@ -8,6 +8,7 @@ import { getLatestWeight, logWeight, getWeightHistory } from '../lib/api/weight'
 import { useToast } from '../components/Toast'
 import { Utensils, Dumbbell, ChevronRight, Play, Scale, X, TrendingUp, TrendingDown, Droplets, Plus } from 'lucide-react'
 import { addWater } from '../lib/api/nutrition'
+import CalorieRing from '../components/CalorieRing'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -92,9 +93,7 @@ export default function Dashboard() {
   }
 
   const calorieTarget = profile?.target_calories || 0
-  const caloriePercent = calorieTarget > 0 ? Math.min(100, Math.round((todayTotals.calories / calorieTarget) * 100)) : 0
   const proteinTarget = profile?.target_protein || 0
-  const proteinPercent = proteinTarget > 0 ? Math.min(100, Math.round((todayTotals.protein / proteinTarget) * 100)) : 0
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white px-4 py-6 pb-24 overflow-x-hidden max-w-lg mx-auto">
@@ -118,36 +117,17 @@ export default function Dashboard() {
           <ChevronRight size={16} className="text-zinc-600" />
         </div>
 
-        <div className="flex items-baseline gap-2 mb-3">
-          <span className="text-3xl font-bold">{todayTotals.calories}</span>
-          <span className="text-zinc-500 text-sm">/ {calorieTarget} cal</span>
-          <span className="text-zinc-600 text-xs ml-auto">{caloriePercent}%</span>
-        </div>
-
-        {/* Calorie progress bar */}
-        <div className="h-2 bg-zinc-800 rounded-full mb-4 overflow-hidden">
-          <div
-            className="h-full bg-white rounded-full transition-all duration-300"
-            style={{ width: `${caloriePercent}%` }}
-          />
-        </div>
-
-        {/* Macro breakdown */}
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: 'Protein', value: todayTotals.protein, target: proteinTarget, color: 'text-blue-400' },
-            { label: 'Fat', value: todayTotals.fat, target: profile?.target_fat || 0, color: 'text-amber-400' },
-            { label: 'Carbs', value: todayTotals.carbs, target: profile?.target_carbs || 0, color: 'text-green-400' },
-          ].map((m) => (
-            <div key={m.label}>
-              <div className="text-xs text-zinc-500 mb-0.5">{m.label}</div>
-              <div className="text-sm font-bold">
-                <span className={m.color}>{m.value}g</span>
-                <span className="text-zinc-600"> / {m.target}g</span>
-              </div>
-            </div>
-          ))}
-        </div>
+        <CalorieRing
+          calories={todayTotals.calories}
+          calorieTarget={calorieTarget}
+          protein={todayTotals.protein}
+          proteinTarget={proteinTarget}
+          fat={todayTotals.fat}
+          fatTarget={profile?.target_fat || 0}
+          carbs={todayTotals.carbs}
+          carbsTarget={profile?.target_carbs || 0}
+          compact
+        />
       </button>
 
       {/* Quick actions */}
