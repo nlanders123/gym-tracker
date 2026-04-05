@@ -15,6 +15,8 @@ import {
 import { lookupBarcode, searchFood, searchFoodUSDA } from '../lib/api/food'
 import { searchCommonFoods } from '../lib/common-foods'
 import BarcodeScanner from './BarcodeScanner'
+import FoodHealthBadge from './FoodHealthBadge'
+import FoodDetailModal from './FoodDetailModal'
 
 function formatMealLabel(key) {
   if (!key) return ''
@@ -60,6 +62,10 @@ export default function MealLoggerModal({
   const [quantityMeal, setQuantityMeal] = useState(null)
   const [quantity, setQuantity] = useState(1)
 
+  // Health detail modal state
+  const [healthDetail, setHealthDetail] = useState(null) // { health, food }
+  const [scannedHealthData, setScannedHealthData] = useState(null) // health data from barcode scan
+
   const isEdit = !!existingMeal
   const category = mealType
 
@@ -68,6 +74,8 @@ export default function MealLoggerModal({
     setScanError(null)
     setQuantityMeal(null)
     setQuantity(1)
+    setScannedHealthData(null)
+    setHealthDetail(null)
     if (existingMeal) {
       setForm({
         name: existingMeal.name ?? 'Quick Add',
@@ -273,6 +281,7 @@ export default function MealLoggerModal({
       const { data, error } = await lookupBarcode(barcode)
       if (error || !data) {
         setScanError(`Barcode ${barcode} not found in database`)
+        setScannedHealthData(null)
         setLoading(false)
         return
       }
@@ -286,8 +295,11 @@ export default function MealLoggerModal({
         sodium: String(data.sodium || ''),
         sugar: String(data.sugar || ''),
       })
+      // Store health data for display on the form view
+      setScannedHealthData(data)
     } catch (err) {
       setScanError('Failed to look up barcode')
+      setScannedHealthData(null)
     } finally {
       setLoading(false)
     }
@@ -527,10 +539,19 @@ export default function MealLoggerModal({
                 onClick={() => handleSelectSearchResult(food)}
                 className="w-full text-left bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 hover:border-zinc-700 transition"
               >
-                <div className="text-white text-sm font-medium truncate">{food.name}</div>
-                <div className="text-zinc-500 text-xs mt-0.5">
-                  {food.calories} cal · {food.protein}P · {food.fat}F · {food.carbs}C
-                  <span className="text-zinc-600 ml-2">per {food.servingSize}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-white text-sm font-medium truncate">{food.name}</div>
+                    <div className="text-zinc-500 text-xs mt-0.5">
+                      {food.calories} cal · {food.protein}P · {food.fat}F · {food.carbs}C
+                      <span className="text-zinc-600 ml-2">per {food.servingSize}</span>
+                    </div>
+                  </div>
+                  <FoodHealthBadge
+                    food={food}
+                    compact
+                    onClick={(health) => setHealthDetail({ health, food })}
+                  />
                 </div>
               </button>
             ))}
@@ -541,6 +562,13 @@ export default function MealLoggerModal({
             )}
           </div>
         </div>
+
+        <FoodDetailModal
+          isOpen={!!healthDetail}
+          onClose={() => setHealthDetail(null)}
+          health={healthDetail?.health}
+          food={healthDetail?.food}
+        />
       </div>
     )
   }
@@ -714,6 +742,19 @@ export default function MealLoggerModal({
           </div>
         </div>
 
+        {/* Health badge from barcode scan */}
+        {scannedHealthData && !isEdit && (scannedHealthData.nutriScore || scannedHealthData.novaGroup || (scannedHealthData.additives && scannedHealthData.additives.length > 0)) && (
+          <div className="mb-4 bg-zinc-950 border border-zinc-800 rounded-xl p-3">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] text-zinc-500 font-bold uppercase">Health Score</div>
+              <FoodHealthBadge
+                food={scannedHealthData}
+                onClick={(health) => setHealthDetail({ health, food: scannedHealthData })}
+              />
+            </div>
+          </div>
+        )}
+
         {scanError && (
           <div className="bg-red-500/10 border border-red-500/50 text-red-400 rounded-xl p-3 text-sm mb-4">
             <div>{scanError}</div>
@@ -821,6 +862,13 @@ export default function MealLoggerModal({
           </div>
         </form>
       </div>
+
+      <FoodDetailModal
+        isOpen={!!healthDetail}
+        onClose={() => setHealthDetail(null)}
+        health={healthDetail?.health}
+        food={healthDetail?.food}
+      />
     </div>
   )
 }

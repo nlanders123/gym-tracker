@@ -8,7 +8,7 @@ const USDA_KEY = 'DEMO_KEY' // Free USDA FoodData Central API key
  */
 export async function lookupBarcode(barcode) {
   try {
-    const res = await fetch(`${OFF_BASE}/product/${barcode}?fields=product_name,nutriments,serving_size,brands,nutrition_grades`)
+    const res = await fetch(`${OFF_BASE}/product/${barcode}?fields=product_name,nutriments,serving_size,brands,nutrition_grades,nova_group,additives_tags,additives_n,ingredients_text,labels_tags,categories_tags,image_front_small_url`)
     if (!res.ok) return { data: null, error: 'Network error' }
 
     const json = await res.json()
@@ -58,6 +58,15 @@ export async function lookupBarcode(barcode) {
         iron,
         servingSize: p.serving_size || '100g',
         isPerServing: !!(n['proteins_serving'] || n['fat_serving']),
+        // Health intelligence fields (YUKA-style)
+        nutriScore: p.nutrition_grades || null,
+        novaGroup: p.nova_group || null,
+        additives: p.additives_tags || [],
+        additivesCount: p.additives_n || 0,
+        ingredients: p.ingredients_text || null,
+        labels: p.labels_tags || [],
+        categories: p.categories_tags || [],
+        imageUrl: p.image_front_small_url || null,
       },
       error: null,
     }
@@ -72,7 +81,7 @@ export async function lookupBarcode(barcode) {
 export async function searchFood(query, limit = 10) {
   try {
     const res = await fetch(
-      `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=${limit}&fields=code,product_name,brands,nutriments,serving_size`
+      `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=${limit}&fields=code,product_name,brands,nutriments,serving_size,nutrition_grades,nova_group,additives_tags,additives_n,ingredients_text,labels_tags,categories_tags`
     )
     if (!res.ok) return { data: [], error: 'Network error' }
 
@@ -98,6 +107,14 @@ export async function searchFood(query, limit = 10) {
         calcium: Math.round((n['calcium_serving'] ?? n['calcium_100g'] ?? 0) * 1000),
         iron: Math.round((n['iron_serving'] ?? n['iron_100g'] ?? 0) * 1000),
         servingSize: p.serving_size || '100g',
+        // Health intelligence fields
+        nutriScore: p.nutrition_grades || null,
+        novaGroup: p.nova_group || null,
+        additives: p.additives_tags || [],
+        additivesCount: p.additives_n || 0,
+        ingredients: p.ingredients_text || null,
+        labels: p.labels_tags || [],
+        categories: p.categories_tags || [],
       }
     })
 
